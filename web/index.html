@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>VPN Manager</title>
+  </head>
+  <body>
+    <main class="shell">
+      <section class="topbar">
+        <div>
+          <h1>VPN Manager</h1>
+          <p id="server-state">Загрузка состояния...</p>
+        </div>
+        <button id="refresh" type="button">Обновить</button>
+      </section>
+
+      <section class="panel">
+        <h2>OpenVPN</h2>
+        <dl class="status-grid">
+          <div>
+            <dt>Установлен</dt>
+            <dd id="openvpn-installed">-</dd>
+          </div>
+          <div>
+            <dt>Сервис</dt>
+            <dd id="openvpn-active">-</dd>
+          </div>
+          <div>
+            <dt>Status log</dt>
+            <dd id="openvpn-status-log">-</dd>
+          </div>
+          <div>
+            <dt>Профили</dt>
+            <dd id="openvpn-profile-dir">-</dd>
+          </div>
+        </dl>
+      </section>
+
+      <section class="panel">
+        <div class="section-head">
+          <h2>Клиенты</h2>
+          <form id="client-form">
+            <input id="client-name" name="name" placeholder="client_name" autocomplete="off">
+            <button type="submit">Создать</button>
+          </form>
+        </div>
+        <div id="clients" class="list"></div>
+      </section>
+
+      <section class="panel">
+        <h2>События</h2>
+        <div id="events" class="list"></div>
+      </section>
+
+      <section class="panel">
+        <h2>Подключения</h2>
+        <div id="connections" class="list"></div>
+      </section>
+    </main>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

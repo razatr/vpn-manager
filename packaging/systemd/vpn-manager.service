@@ -1,0 +1,23 @@
+[Unit]
+Description=VPN Manager
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=vpn-manager
+Group=vpn-manager
+WorkingDirectory=/opt/vpn-manager
+Environment=VPN_MANAGER_CONFIG=/etc/vpn-manager/config.json
+ExecStart=/usr/bin/env node /opt/vpn-manager/src/main.js
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+ReadWritePaths=/var/lib/vpn-manager /var/log/vpn-manager
+
+[Install]
+WantedBy=multi-user.target
+

@@ -1,0 +1,25 @@
+{
+  "name": "vpn-manager",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "vpn-manager": "./src/main.js"
+  },
+  "scripts": {
+    "start": "node src/main.js",
+    "dev": "vite --host 127.0.0.1",
+    "build": "vite build",
+    "typecheck": "tsc --noEmit",
+    "test:e2e": "playwright test",
+    "check": "npm run typecheck && node --check src/main.js && node --check src/config.js && node --check src/server.js && node --check src/store.js && node --check src/providers/openvpn.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.61.1",
+    "typescript": "^7.0.2",
+    "vite": "^8.1.4"
+  }
+}
