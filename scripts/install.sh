@@ -192,6 +192,7 @@ chown -R root:root "${APP_DIR}" "${CONFIG_DIR}"
 chown -R root:root "${HELPER_DIR}"
 chown root:"${APP_USER}" "${CONFIG_DIR}/config.json"
 chown -R "${APP_USER}:${APP_USER}" "${DATA_DIR}" "${LOG_DIR}"
+find "${DATA_DIR}/profiles/openvpn" -type f -name '*.ovpn' -exec chown root:"${APP_USER}" {} \; -exec chmod 0640 {} \; 2>/dev/null || true
 chmod 0660 "${CONFIG_DIR}/config.json"
 chmod 0644 "${SERVICE_FILE}"
 
