@@ -124,7 +124,6 @@ ExecStart=/usr/bin/env node ${APP_DIR}/src/main.js
 Restart=on-failure
 RestartSec=3
 AmbientCapabilities=CAP_NET_BIND_SERVICE
-CapabilityBoundingSet=CAP_NET_BIND_SERVICE
 PrivateTmp=true
 ProtectSystem=full
 ProtectHome=true
