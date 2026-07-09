@@ -109,7 +109,7 @@ export class OpenVPNProvider {
       maxBuffer: 1024 * 1024
     });
 
-    return JSON.parse(stdout);
+    return parseJsonOutput(stdout);
   }
 
   async fallbackStatus(extra = {}) {
@@ -125,6 +125,26 @@ export class OpenVPNProvider {
       profileDir: this.config.profileDir,
       ...extra
     };
+  }
+}
+
+function parseJsonOutput(stdout) {
+  const trimmed = stdout.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  try {
+    return JSON.parse(trimmed);
+  } catch {
+    const jsonLine = trimmed
+      .split(/\r?\n/)
+      .reverse()
+      .find((line) => line.trim().startsWith("{") || line.trim().startsWith("["));
+    if (jsonLine) {
+      return JSON.parse(jsonLine);
+    }
+    throw new Error(`Helper did not return JSON: ${trimmed.slice(0, 200)}`);
   }
 }
 

@@ -13,6 +13,7 @@ SERVER_CONF="${SERVER_DIR}/server.conf"
 CLIENT_COMMON="${SERVER_DIR}/client-common.txt"
 INDEX_FILE="${EASY_RSA_DIR}/pki/index.txt"
 SERVICE_NAME="${OPENVPN_SERVICE_NAME:-openvpn-server@server.service}"
+INSTALL_LOG="${VPN_MANAGER_OPENVPN_INSTALL_LOG:-/var/log/vpn-manager/openvpn-install.log}"
 
 json_bool() {
   if [[ "$1" == "true" ]]; then
@@ -142,15 +143,20 @@ install_openvpn() {
     exit 3
   fi
 
-  VPN_MANAGER_AUTO_INSTALL=y \
-  VPN_MANAGER_APPROVE_INSTALL=y \
-  VPN_MANAGER_PUBLIC_HOST="${public_host}" \
-  VPN_MANAGER_OPENVPN_PORT="${port}" \
-  VPN_MANAGER_OPENVPN_PROTOCOL="${protocol}" \
-  VPN_MANAGER_OPENVPN_DNS="${dns}" \
-  VPN_MANAGER_OPENVPN_CUSTOM_DNS="${custom_dns}" \
-  VPN_MANAGER_OPENVPN_FIRST_CLIENT="${first_client}" \
-  bash "${INSTALL_SCRIPT}"
+  mkdir -p "$(dirname "${INSTALL_LOG}")"
+  if ! VPN_MANAGER_AUTO_INSTALL=y \
+    VPN_MANAGER_APPROVE_INSTALL=y \
+    VPN_MANAGER_PUBLIC_HOST="${public_host}" \
+    VPN_MANAGER_OPENVPN_PORT="${port}" \
+    VPN_MANAGER_OPENVPN_PROTOCOL="${protocol}" \
+    VPN_MANAGER_OPENVPN_DNS="${dns}" \
+    VPN_MANAGER_OPENVPN_CUSTOM_DNS="${custom_dns}" \
+    VPN_MANAGER_OPENVPN_FIRST_CLIENT="${first_client}" \
+    bash "${INSTALL_SCRIPT}" > "${INSTALL_LOG}" 2>&1; then
+    echo "OpenVPN installer failed. Log: ${INSTALL_LOG}" >&2
+    tail -80 "${INSTALL_LOG}" >&2 || true
+    exit 5
+  fi
 
   mkdir -p "${PROFILE_DIR}"
   generated_profile="$(dirname "${INSTALL_SCRIPT}")/${first_client}.ovpn"
