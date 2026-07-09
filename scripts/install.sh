@@ -136,11 +136,8 @@ Restart=on-failure
 RestartSec=3
 AmbientCapabilities=CAP_NET_BIND_SERVICE
 PrivateTmp=true
-ProtectSystem=full
 ProtectHome=true
 RuntimeDirectory=openvpn-server
-ReadWritePaths=${DATA_DIR} ${LOG_DIR} /etc/openvpn /run/openvpn-server
-ReadWritePaths=/etc/systemd/system /etc/sysctl.d
 
 [Install]
 WantedBy=multi-user.target
