@@ -41,6 +41,8 @@ export class JsonStore {
         client.status = status;
         client.profilePath = profilePath;
         client.revokedAt = status === "revoked" ? client.revokedAt || new Date().toISOString() : null;
+      } else if (status === "revoked") {
+        continue;
       } else {
         db.clients.push({
           id: crypto.randomUUID(),
