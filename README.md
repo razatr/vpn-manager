@@ -42,6 +42,18 @@ E2E smoke test в Chromium:
 npm run test:e2e
 ```
 
+Все тесты:
+
+```bash
+npm test
+```
+
+Проверка окружения на сервере:
+
+```bash
+sudo bash scripts/doctor.sh
+```
+
 API:
 
 ```text
