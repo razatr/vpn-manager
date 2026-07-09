@@ -52,6 +52,33 @@ export class JsonStore {
     return client;
   }
 
+  async upsertClient({ provider, name, status = "registered", profilePath = null }) {
+    const db = await this.read();
+    const client = db.clients.find((item) => item.provider === provider && item.name === name);
+
+    if (client) {
+      client.status = status;
+      client.profilePath = profilePath;
+      client.revokedAt = status === "revoked" ? client.revokedAt || new Date().toISOString() : null;
+      await this.write(db);
+      return client;
+    }
+
+    const newClient = {
+      id: crypto.randomUUID(),
+      provider,
+      name,
+      status,
+      createdAt: new Date().toISOString(),
+      revokedAt: null,
+      profilePath
+    };
+
+    db.clients.push(newClient);
+    await this.write(db);
+    return newClient;
+  }
+
   async findClient({ provider, name }) {
     const db = await this.read();
     return db.clients.find((client) => client.provider === provider && client.name === name) || null;

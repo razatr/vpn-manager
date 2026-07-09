@@ -91,7 +91,7 @@ async function handleApi({ req, res, url, config, store, providers }) {
     const body = await readJson(req);
     const setup = await providers.openvpn.install(validateOpenVPNSetup(body));
     const firstClientName = setup.firstClient || body.firstClient || "admin";
-    const client = await store.createClient({
+    const client = await store.upsertClient({
       provider: "openvpn",
       name: firstClientName,
       status: "active",
