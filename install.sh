@@ -15,6 +15,24 @@ if [[ "${EUID}" -ne 0 ]]; then
   exit 1
 fi
 
+install_bootstrap_deps() {
+  if command -v git >/dev/null 2>&1; then
+    return
+  fi
+
+  if command -v apt-get >/dev/null 2>&1; then
+    apt-get update
+    apt-get install -y git ca-certificates
+  elif command -v dnf >/dev/null 2>&1; then
+    dnf install -y git ca-certificates
+  else
+    echo "git is required and this installer does not know how to install it on this OS."
+    exit 1
+  fi
+}
+
+install_bootstrap_deps
+
 if ! command -v git >/dev/null 2>&1; then
   echo "git is required to install VPN Manager."
   exit 1
@@ -25,4 +43,3 @@ git clone --depth 1 --branch "${REPO_REF}" "${REPO_URL}" "${WORK_DIR}/vpn-manage
 
 cd "${WORK_DIR}/vpn-manager"
 exec bash scripts/install.sh
-

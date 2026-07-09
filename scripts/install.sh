@@ -19,6 +19,33 @@ if [[ "${EUID}" -ne 0 ]]; then
   exit 1
 fi
 
+install_runtime_deps() {
+  missing=()
+  for cmd in node npm git curl sudo openssl; do
+    if ! command -v "${cmd}" >/dev/null 2>&1; then
+      missing+=("${cmd}")
+    fi
+  done
+
+  if [[ "${#missing[@]}" -eq 0 ]]; then
+    return
+  fi
+
+  echo "Installing runtime dependencies: ${missing[*]}"
+  if command -v apt-get >/dev/null 2>&1; then
+    apt-get update
+    apt-get install -y nodejs npm git curl sudo openssl ca-certificates
+  elif command -v dnf >/dev/null 2>&1; then
+    dnf install -y nodejs npm git curl sudo openssl ca-certificates
+  else
+    echo "Missing dependencies: ${missing[*]}"
+    echo "Install them manually and rerun this installer."
+    exit 1
+  fi
+}
+
+install_runtime_deps
+
 if ! command -v node >/dev/null 2>&1; then
   echo "Node.js 20 or newer is required. Install Node.js first, then rerun this script."
   exit 1
