@@ -101,7 +101,7 @@ fs.writeFileSync(path, JSON.stringify(config, null, 2) + '\n');
 "
 
 cat > "${SUDOERS_FILE}" <<SUDOERS
-${APP_USER} ALL=(root) NOPASSWD: ${HELPER_PATH}
+${APP_USER} ALL=(root) NOPASSWD:SETENV: ${HELPER_PATH}
 SUDOERS
 chmod 0440 "${SUDOERS_FILE}"
 if command -v visudo >/dev/null 2>&1; then

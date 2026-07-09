@@ -88,7 +88,7 @@ export class OpenVPNProvider {
 
   async runJson(args) {
     const command = this.config.helperUseSudo ? "sudo" : this.config.helperPath;
-    const commandArgs = this.config.helperUseSudo ? [this.config.helperPath, ...args] : args;
+    const commandArgs = this.config.helperUseSudo ? ["-E", this.config.helperPath, ...args] : args;
     const { stdout } = await execFileAsync(command, commandArgs, {
       env: {
         ...process.env,
