@@ -21,7 +21,7 @@ fi
 
 install_runtime_deps() {
   missing=()
-  for cmd in node npm git curl sudo openssl; do
+  for cmd in node git curl sudo openssl; do
     if ! command -v "${cmd}" >/dev/null 2>&1; then
       missing+=("${cmd}")
     fi
@@ -34,9 +34,9 @@ install_runtime_deps() {
   echo "Installing runtime dependencies: ${missing[*]}"
   if command -v apt-get >/dev/null 2>&1; then
     apt-get update
-    apt-get install -y nodejs npm git curl sudo openssl ca-certificates
+    apt-get install -y nodejs git curl sudo openssl ca-certificates
   elif command -v dnf >/dev/null 2>&1; then
-    dnf install -y nodejs npm git curl sudo openssl ca-certificates
+    dnf install -y nodejs git curl sudo openssl ca-certificates
   else
     echo "Missing dependencies: ${missing[*]}"
     echo "Install them manually and rerun this installer."
@@ -75,6 +75,17 @@ mkdir -p "${APP_DIR}" "${CONFIG_DIR}" "${DATA_DIR}" "${LOG_DIR}" "${HELPER_DIR}"
 
 if [[ ! -d ./web/dist ]]; then
   echo "web/dist not found. Building frontend..."
+  if ! command -v npm >/dev/null 2>&1; then
+    if command -v apt-get >/dev/null 2>&1; then
+      apt-get update
+      apt-get install -y npm
+    elif command -v dnf >/dev/null 2>&1; then
+      dnf install -y npm
+    else
+      echo "npm is required to build frontend when web/dist is missing."
+      exit 1
+    fi
+  fi
   npm ci
   npm run build
 fi

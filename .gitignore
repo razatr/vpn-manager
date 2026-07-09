@@ -1,5 +1,7 @@
 node_modules/
 dist/
+!web/dist/
+!web/dist/**
 coverage/
 .env
 .DS_Store
