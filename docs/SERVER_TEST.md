@@ -10,7 +10,7 @@ Required before install:
 
 ```bash
 sudo apt-get update
-sudo apt-get install -y git curl sudo nodejs npm openssl
+sudo apt-get install -y git curl sudo nodejs openssl
 ```
 
 On non-Debian systems use the equivalent package manager.
@@ -83,4 +83,3 @@ OpenVPN status:
 sudo systemctl status openvpn-server@server.service
 sudo /usr/local/lib/vpn-manager/openvpn-helper status
 ```
-

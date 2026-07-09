@@ -19,7 +19,6 @@ check "systemd" command -v systemctl
 check "sudo" command -v sudo
 check "git" command -v git
 check "node" command -v node
-check "npm" command -v npm
 check "openssl" command -v openssl
 check "TUN device" test -e /dev/net/tun
 
@@ -42,4 +41,3 @@ fi
 if [[ "${failures}" -gt 0 ]]; then
   exit 1
 fi
-
