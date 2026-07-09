@@ -54,17 +54,18 @@ prompt_admin_credentials() {
     return
   fi
 
-  local tty="/dev/tty"
-  if [[ -r "${tty}" && -w "${tty}" ]]; then
+  if exec 3<>/dev/tty 2>/dev/null; then
     if [[ -z "${ADMIN_USERNAME}" ]]; then
-      read -r -p "Admin username [admin]: " ADMIN_USERNAME < "${tty}" || true
+      read -r -p "Admin username [admin]: " ADMIN_USERNAME <&3 || true
       ADMIN_USERNAME="${ADMIN_USERNAME:-admin}"
     fi
     if [[ -z "${ADMIN_PASSWORD}" ]]; then
-      read -r -s -p "Admin password [vpnpass]: " ADMIN_PASSWORD < "${tty}" || true
-      printf '\n' > "${tty}"
+      read -r -s -p "Admin password [vpnpass]: " ADMIN_PASSWORD <&3 || true
+      printf '\n' >&3
       ADMIN_PASSWORD="${ADMIN_PASSWORD:-vpnpass}"
     fi
+    exec 3<&-
+    exec 3>&-
   else
     ADMIN_USERNAME="${ADMIN_USERNAME:-admin}"
     ADMIN_PASSWORD="${ADMIN_PASSWORD:-vpnpass}"
