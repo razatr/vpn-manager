@@ -71,7 +71,7 @@ if ! id "${APP_USER}" >/dev/null 2>&1; then
   useradd --system --home-dir "${DATA_DIR}" --shell /usr/sbin/nologin "${APP_USER}"
 fi
 
-mkdir -p "${APP_DIR}" "${CONFIG_DIR}" "${DATA_DIR}" "${LOG_DIR}" "${HELPER_DIR}"
+mkdir -p "${APP_DIR}" "${CONFIG_DIR}" "${DATA_DIR}" "${LOG_DIR}" "${HELPER_DIR}" /etc/openvpn /run/openvpn-server
 
 if [[ ! -d ./web/dist ]]; then
   echo "web/dist not found. Building frontend..."
@@ -126,6 +126,7 @@ RestartSec=3
 PrivateTmp=true
 ProtectSystem=full
 ProtectHome=true
+RuntimeDirectory=openvpn-server
 ReadWritePaths=${DATA_DIR} ${LOG_DIR} /etc/openvpn /run/openvpn-server
 
 [Install]
