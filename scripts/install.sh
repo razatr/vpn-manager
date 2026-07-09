@@ -141,7 +141,8 @@ chmod 0644 "${CONFIG_DIR}/config.json"
 chmod 0644 "${SERVICE_FILE}"
 
 systemctl daemon-reload
-systemctl enable --now "${APP_NAME}.service"
+systemctl enable "${APP_NAME}.service"
+systemctl restart "${APP_NAME}.service"
 
 echo
 echo "VPN Manager installed."
