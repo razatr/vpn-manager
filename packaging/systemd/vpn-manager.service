@@ -12,6 +12,8 @@ Environment=VPN_MANAGER_CONFIG=/etc/vpn-manager/config.json
 ExecStart=/usr/bin/env node /opt/vpn-manager/src/main.js
 Restart=on-failure
 RestartSec=3
+AmbientCapabilities=CAP_NET_BIND_SERVICE
+CapabilityBoundingSet=CAP_NET_BIND_SERVICE
 PrivateTmp=true
 ProtectSystem=full
 ProtectHome=true
