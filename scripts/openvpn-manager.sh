@@ -79,6 +79,13 @@ group_name() {
   fi
 }
 
+ensure_status_log_config() {
+  mkdir -p "$(dirname "${STATUS_LOG}")"
+  if [[ -f "${SERVER_CONF}" ]] && ! grep -qE '^status ' "${SERVER_CONF}"; then
+    printf 'status %s 10\n' "${STATUS_LOG}" >> "${SERVER_CONF}"
+  fi
+}
+
 install_openvpn() {
   local public_host=""
   local port="1194"
@@ -178,6 +185,10 @@ install_openvpn() {
     echo "OpenVPN server config was not created. Log: ${INSTALL_LOG}" >&2
     tail -80 "${INSTALL_LOG}" >&2 || true
     exit 5
+  fi
+  ensure_status_log_config
+  if command -v systemctl >/dev/null 2>&1 && systemctl list-unit-files "${SERVICE_NAME}" >/dev/null 2>&1; then
+    systemctl restart "${SERVICE_NAME}" 2>/dev/null || true
   fi
 
   printf '{"installed":true,"firstClient":%s,"profilePath":%s}\n' \
