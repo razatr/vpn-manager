@@ -9,10 +9,13 @@ DATA_DIR="/var/lib/vpn-manager"
 LOG_DIR="/var/log/vpn-manager"
 HELPER_DIR="/usr/local/lib/vpn-manager"
 HELPER_PATH="${HELPER_DIR}/openvpn-helper"
+VLESS_HELPER_PATH="${HELPER_DIR}/vless-helper"
 SUDOERS_FILE="/etc/sudoers.d/vpn-manager"
 SERVICE_FILE="/etc/systemd/system/vpn-manager.service"
 PORT="${VPN_MANAGER_PORT:-80}"
 ADMIN_TOKEN="${VPN_MANAGER_ADMIN_TOKEN:-$(openssl rand -hex 24)}"
+ADMIN_USERNAME="${VPN_MANAGER_ADMIN_USERNAME:-}"
+ADMIN_PASSWORD="${VPN_MANAGER_ADMIN_PASSWORD:-}"
 
 if [[ "${EUID}" -ne 0 ]]; then
   echo "This installer must be run as root."
@@ -45,6 +48,30 @@ install_runtime_deps() {
 }
 
 install_runtime_deps
+
+prompt_admin_credentials() {
+  if [[ -n "${ADMIN_USERNAME}" && -n "${ADMIN_PASSWORD}" ]]; then
+    return
+  fi
+
+  local tty="/dev/tty"
+  if [[ -r "${tty}" && -w "${tty}" ]]; then
+    if [[ -z "${ADMIN_USERNAME}" ]]; then
+      read -r -p "Admin username [admin]: " ADMIN_USERNAME < "${tty}" || true
+      ADMIN_USERNAME="${ADMIN_USERNAME:-admin}"
+    fi
+    if [[ -z "${ADMIN_PASSWORD}" ]]; then
+      read -r -s -p "Admin password [vpnpass]: " ADMIN_PASSWORD < "${tty}" || true
+      printf '\n' > "${tty}"
+      ADMIN_PASSWORD="${ADMIN_PASSWORD:-vpnpass}"
+    fi
+  else
+    ADMIN_USERNAME="${ADMIN_USERNAME:-admin}"
+    ADMIN_PASSWORD="${ADMIN_PASSWORD:-vpnpass}"
+  fi
+}
+
+prompt_admin_credentials
 
 if ! command -v node >/dev/null 2>&1; then
   echo "Node.js 20 or newer is required. Install Node.js first, then rerun this script."
@@ -92,27 +119,43 @@ fi
 
 cp -R ./package.json ./package-lock.json ./src ./web ./scripts "${APP_DIR}/"
 cp ./scripts/openvpn-manager.sh "${HELPER_PATH}"
+cp ./scripts/vless-manager.sh "${VLESS_HELPER_PATH}"
 cp -R ./third_party "${HELPER_DIR}/"
 chmod 0755 "${HELPER_PATH}"
+chmod 0755 "${VLESS_HELPER_PATH}"
 cp ./config.example.json "${CONFIG_DIR}/config.json"
 
-node -e "
+VPN_MANAGER_ADMIN_USERNAME="${ADMIN_USERNAME}" VPN_MANAGER_ADMIN_PASSWORD="${ADMIN_PASSWORD}" node -e "
 const fs = require('fs');
+const crypto = require('crypto');
 const path = '${CONFIG_DIR}/config.json';
 const config = JSON.parse(fs.readFileSync(path, 'utf8'));
+const salt = crypto.randomBytes(16).toString('hex');
+const passwordHash = crypto.scryptSync(process.env.VPN_MANAGER_ADMIN_PASSWORD, salt, 32).toString('hex');
 config.port = Number('${PORT}');
 config.dataDir = '${DATA_DIR}';
 config.publicUrl = 'http://' + require('os').hostname() + ':' + config.port;
-config.auth = { enabled: true, adminToken: '${ADMIN_TOKEN}' };
+config.auth = {
+  enabled: true,
+  adminToken: '${ADMIN_TOKEN}',
+  username: process.env.VPN_MANAGER_ADMIN_USERNAME,
+  passwordHash,
+  passwordSalt: salt
+};
 config.openvpn.helperPath = '${HELPER_PATH}';
 config.openvpn.helperUseSudo = true;
 config.openvpn.installScriptPath = '${HELPER_DIR}/third_party/openvpn-install/openvpn-install.sh';
 config.openvpn.profileDir = '${DATA_DIR}/profiles/openvpn';
+config.vless.helperPath = '${VLESS_HELPER_PATH}';
+config.vless.helperUseSudo = true;
+config.vless.configPath = '/etc/xray/config.json';
+config.vless.profileDir = '${DATA_DIR}/profiles/vless';
 fs.writeFileSync(path, JSON.stringify(config, null, 2) + '\n');
-"
+" 
 
 cat > "${SUDOERS_FILE}" <<SUDOERS
 ${APP_USER} ALL=(root) NOPASSWD:SETENV: ${HELPER_PATH}
+${APP_USER} ALL=(root) NOPASSWD:SETENV: ${VLESS_HELPER_PATH}
 SUDOERS
 chmod 0440 "${SUDOERS_FILE}"
 if command -v visudo >/dev/null 2>&1; then
@@ -145,8 +188,9 @@ SERVICE
 
 chown -R root:root "${APP_DIR}" "${CONFIG_DIR}"
 chown -R root:root "${HELPER_DIR}"
+chown root:"${APP_USER}" "${CONFIG_DIR}/config.json"
 chown -R "${APP_USER}:${APP_USER}" "${DATA_DIR}" "${LOG_DIR}"
-chmod 0644 "${CONFIG_DIR}/config.json"
+chmod 0660 "${CONFIG_DIR}/config.json"
 chmod 0644 "${SERVICE_FILE}"
 
 systemctl daemon-reload
@@ -156,6 +200,8 @@ systemctl restart "${APP_NAME}.service"
 echo
 echo "VPN Manager installed."
 echo "URL: http://$(hostname):${PORT}"
-echo "Admin token: ${ADMIN_TOKEN}"
+echo "Username: ${ADMIN_USERNAME}"
+echo "Password: ${ADMIN_PASSWORD}"
+echo "API token: ${ADMIN_TOKEN}"
 echo "Config: ${CONFIG_DIR}/config.json"
 echo "Logs: journalctl -u ${APP_NAME} -f"

@@ -1,7 +1,9 @@
 import fs from "node:fs";
 import http from "node:http";
 import path from "node:path";
+import crypto from "node:crypto";
 import { fileURLToPath } from "node:url";
+import { saveConfig } from "./config.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const webDistDir = path.resolve(__dirname, "..", "web", "dist");
@@ -36,7 +38,7 @@ async function handleApi({ req, res, url, config, store, providers }) {
 
   if (req.method === "POST" && url.pathname === "/api/auth/login") {
     const body = await readJson(req);
-    if (!config.auth.enabled || body.token === config.auth.adminToken) {
+    if (!config.auth.enabled || isValidLogin(body, config)) {
       res.writeHead(204, {
         "set-cookie": cookieHeader("vm_session", config.auth.enabled ? config.auth.adminToken : "dev", {
           httpOnly: true,
@@ -70,12 +72,34 @@ async function handleApi({ req, res, url, config, store, providers }) {
     return;
   }
 
+  if (req.method === "POST" && url.pathname === "/api/auth/credentials") {
+    const body = await readJson(req);
+    const username = validateUsername(body.username);
+    const password = validatePassword(body.password);
+    const credentials = hashPassword(password);
+    config.auth.username = username;
+    config.auth.passwordHash = credentials.hash;
+    config.auth.passwordSalt = credentials.salt;
+    saveConfig(config);
+    await store.addEvent({
+      type: "auth.credentials_changed",
+      provider: "system",
+      message: `Admin credentials changed for ${username}`
+    });
+    sendJson(res, 200, { ok: true, username });
+    return;
+  }
+
   if (req.method === "GET" && url.pathname === "/api/server/status") {
     const openvpn = await providers.openvpn.status();
+    const vless = providers.vless ? await providers.vless.status() : null;
     sendJson(res, 200, {
       ok: true,
       publicUrl: config.publicUrl,
-      providers: { openvpn }
+      auth: {
+        username: config.auth.username
+      },
+      providers: { openvpn, ...(vless ? { vless } : {}) }
     });
     return;
   }
@@ -107,7 +131,11 @@ async function handleApi({ req, res, url, config, store, providers }) {
   }
 
   if (req.method === "GET" && url.pathname === "/api/openvpn/clients") {
-    sendJson(res, 200, { clients: await store.listClients("openvpn") });
+    const externalClients = await providers.openvpn.listClients();
+    const clients = externalClients
+      ? await store.syncClients("openvpn", externalClients)
+      : await store.listClients("openvpn");
+    sendJson(res, 200, { clients });
     return;
   }
 
@@ -161,6 +189,34 @@ async function handleApi({ req, res, url, config, store, providers }) {
 
   if (req.method === "GET" && url.pathname === "/api/openvpn/connections") {
     sendJson(res, 200, { connections: await providers.openvpn.listConnections() });
+    return;
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/vless/clients") {
+    const externalClients = await providers.vless.listClients();
+    const clients = externalClients
+      ? await store.syncClients("vless", externalClients)
+      : await store.listClients("vless");
+    sendJson(res, 200, { clients });
+    return;
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/vless/clients") {
+    const body = await readJson(req);
+    const name = validateClientName(body.name);
+    const profile = await providers.vless.createClient(name);
+    const client = await store.createClient({
+      provider: "vless",
+      name,
+      status: profile.skipped ? "registered" : "active",
+      profilePath: profile.profilePath || null
+    });
+    await store.addEvent({
+      type: "client.created",
+      provider: "vless",
+      message: profile.skipped ? `VLESS client ${name} registered` : `VLESS client ${name} created`
+    });
+    sendJson(res, 201, { client });
     return;
   }
 
@@ -218,6 +274,26 @@ function isAuthorized(req, config) {
   return cookies.vm_session === config.auth.adminToken;
 }
 
+function isValidLogin(body, config) {
+  if (body.token && body.token === config.auth.adminToken) {
+    return true;
+  }
+
+  const username = typeof body.username === "string" ? body.username : "";
+  const password = typeof body.password === "string" ? body.password : "";
+  if (!username || !password || username !== config.auth.username) {
+    return false;
+  }
+
+  if (!config.auth.passwordHash || !config.auth.passwordSalt) {
+    return false;
+  }
+
+  const expected = Buffer.from(config.auth.passwordHash, "hex");
+  const actual = crypto.scryptSync(password, config.auth.passwordSalt, expected.length);
+  return expected.length === actual.length && crypto.timingSafeEqual(expected, actual);
+}
+
 function parseCookies(header) {
   return Object.fromEntries(
     header
@@ -271,6 +347,32 @@ function validateClientName(name) {
     throw error;
   }
   return name;
+}
+
+function validateUsername(username) {
+  if (typeof username !== "string" || !/^[a-zA-Z0-9_.-]{3,64}$/.test(username)) {
+    const error = new Error("Username must match ^[a-zA-Z0-9_.-]{3,64}$");
+    error.statusCode = 400;
+    throw error;
+  }
+  return username;
+}
+
+function validatePassword(password) {
+  if (typeof password !== "string" || password.length < 6 || password.length > 128) {
+    const error = new Error("Password must be 6-128 characters");
+    error.statusCode = 400;
+    throw error;
+  }
+  return password;
+}
+
+function hashPassword(password) {
+  const salt = crypto.randomBytes(16).toString("hex");
+  return {
+    salt,
+    hash: crypto.scryptSync(password, salt, 32).toString("hex")
+  };
 }
 
 function validateOpenVPNSetup(body) {

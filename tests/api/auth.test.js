@@ -2,13 +2,16 @@ import assert from "node:assert/strict";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import crypto from "node:crypto";
 import test from "node:test";
 import { createServer } from "../../src/server.js";
 import { JsonStore } from "../../src/store.js";
 import { OpenVPNProvider } from "../../src/providers/openvpn.js";
 
-test("token auth protects API routes", async () => {
+test("password auth protects API routes and keeps bearer token access", async () => {
   const dataDir = await fs.mkdtemp(path.join(os.tmpdir(), "vpn-manager-auth-"));
+  const passwordSalt = "test-salt";
+  const passwordHash = crypto.scryptSync("vpnpass", passwordSalt, 32).toString("hex");
   const config = {
     host: "127.0.0.1",
     port: 0,
@@ -16,7 +19,10 @@ test("token auth protects API routes", async () => {
     publicUrl: "http://127.0.0.1",
     auth: {
       enabled: true,
-      adminToken: "secret-token"
+      adminToken: "secret-token",
+      username: "admin",
+      passwordHash,
+      passwordSalt
     },
     openvpn: {
       helperPath: path.join(dataDir, "missing-helper"),
@@ -48,7 +54,7 @@ test("token auth protects API routes", async () => {
     const login = await fetch(`${baseUrl}/api/auth/login`, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ token: "secret-token" })
+      body: JSON.stringify({ username: "admin", password: "vpnpass" })
     });
     assert.equal(login.status, 204);
 
@@ -59,6 +65,11 @@ test("token auth protects API routes", async () => {
       headers: { cookie }
     });
     assert.equal(authorized.status, 200);
+
+    const bearer = await fetch(`${baseUrl}/api/server/status`, {
+      headers: { authorization: "Bearer secret-token" }
+    });
+    assert.equal(bearer.status, 200);
   } finally {
     await new Promise((resolve, reject) => {
       server.close((error) => error ? reject(error) : resolve());
@@ -66,4 +77,3 @@ test("token auth protects API routes", async () => {
     await fs.rm(dataDir, { recursive: true, force: true });
   }
 });
-

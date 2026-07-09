@@ -33,6 +33,18 @@ export class OpenVPNProvider {
     return this.runJson(["create-client", name]);
   }
 
+  async listClients() {
+    if (!(await exists(this.config.helperPath))) {
+      return null;
+    }
+
+    try {
+      return await this.runJson(["list-clients"]);
+    } catch {
+      return null;
+    }
+  }
+
   async install(options) {
     if (!(await exists(this.config.helperPath))) {
       const error = new Error(`OpenVPN helper not found: ${this.config.helperPath}`);

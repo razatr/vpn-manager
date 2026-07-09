@@ -8,10 +8,16 @@
   <body>
     <section id="login-panel" class="login-panel" hidden>
       <form id="login-form" class="login-box">
-        <h1>VPN Manager</h1>
-        <input id="admin-token" name="token" type="password" placeholder="Admin token" autocomplete="current-password">
-        <button type="submit">Войти</button>
-        <p id="login-error" class="danger" hidden>Неверный token</p>
+        <div>
+          <h1>VPN Manager</h1>
+          <p>Административный вход</p>
+        </div>
+        <label class="form-label" for="login-username">Логин</label>
+        <input id="login-username" class="form-control" name="username" value="admin" autocomplete="username">
+        <label class="form-label" for="login-password">Пароль</label>
+        <input id="login-password" class="form-control" name="password" type="password" autocomplete="current-password">
+        <button class="btn btn-primary w-100" type="submit">Войти</button>
+        <p id="login-error" class="text-danger" hidden>Неверный логин или пароль</p>
       </form>
     </section>
 
@@ -21,23 +27,27 @@
           <h1>VPN Manager</h1>
           <p id="server-state">Загрузка состояния...</p>
         </div>
-        <div class="row-actions">
-          <button id="refresh" type="button">Обновить</button>
-          <button id="logout" type="button">Выйти</button>
+        <div class="toolbar">
+          <button id="refresh" class="btn btn-outline-primary" type="button">Обновить</button>
+          <button id="logout" class="btn btn-outline-secondary" type="button">Выйти</button>
         </div>
       </section>
 
+      <div id="global-busy" class="busy-bar" hidden>
+        <span class="spinner-border spinner-border-sm" aria-hidden="true"></span>
+        <span id="busy-message">Загрузка...</span>
+      </div>
+      <div id="notice" class="alert alert-info" role="status" hidden></div>
+
       <section class="panel">
-        <h2>OpenVPN</h2>
+        <div class="section-head">
+          <h2>OpenVPN</h2>
+          <div class="toolbar">
+            <span id="openvpn-installed" class="badge text-bg-secondary">-</span>
+            <span id="openvpn-active" class="badge text-bg-secondary">-</span>
+          </div>
+        </div>
         <dl class="status-grid">
-          <div>
-            <dt>Установлен</dt>
-            <dd id="openvpn-installed">-</dd>
-          </div>
-          <div>
-            <dt>Сервис</dt>
-            <dd id="openvpn-active">-</dd>
-          </div>
           <div>
             <dt>Status log</dt>
             <dd id="openvpn-status-log">-</dd>
@@ -52,42 +62,71 @@
       <section id="setup-panel" class="panel" hidden>
         <h2>Первичная настройка</h2>
         <form id="setup-form" class="setup-form">
-          <input id="public-host" name="publicHost" placeholder="example.com или IP" autocomplete="off">
-          <input id="openvpn-port" name="port" type="number" min="1" max="65535" value="1194">
-          <select id="openvpn-protocol" name="protocol">
+          <input id="public-host" class="form-control" name="publicHost" placeholder="example.com или IP" autocomplete="off">
+          <input id="openvpn-port" class="form-control" name="port" type="number" min="1" max="65535" value="1194">
+          <select id="openvpn-protocol" class="form-select" name="protocol">
             <option value="udp">UDP</option>
             <option value="tcp">TCP</option>
           </select>
-          <select id="openvpn-dns" name="dns">
+          <select id="openvpn-dns" class="form-select" name="dns">
             <option value="3">1.1.1.1</option>
             <option value="2">Google</option>
             <option value="1">System</option>
             <option value="7">AdGuard</option>
           </select>
-          <input id="first-client" name="firstClient" value="admin" autocomplete="off">
-          <button type="submit">Установить OpenVPN</button>
+          <input id="first-client" class="form-control" name="firstClient" value="admin" autocomplete="off">
+          <button class="btn btn-primary" type="submit">Сохранить</button>
         </form>
       </section>
 
       <section class="panel">
         <div class="section-head">
-          <h2>Клиенты</h2>
-          <form id="client-form">
-            <input id="client-name" name="name" placeholder="client_name" autocomplete="off">
-            <button type="submit">Создать</button>
-          </form>
+          <h2>VLESS</h2>
+          <div class="toolbar">
+            <span id="vless-installed" class="badge text-bg-secondary">-</span>
+            <span id="vless-active" class="badge text-bg-secondary">-</span>
+          </div>
         </div>
-        <div id="clients" class="list"></div>
+        <dl class="status-grid">
+          <div>
+            <dt>Xray config</dt>
+            <dd id="vless-config">-</dd>
+          </div>
+          <div>
+            <dt>Профили</dt>
+            <dd id="vless-profile-dir">-</dd>
+          </div>
+        </dl>
       </section>
 
       <section class="panel">
-        <h2>События</h2>
-        <div id="events" class="list"></div>
+        <div class="section-head">
+          <h2>Клиенты</h2>
+          <form id="client-form" class="inline-form">
+            <input id="client-name" class="form-control" name="name" placeholder="client_name" autocomplete="off">
+            <button class="btn btn-primary" type="submit">Создать</button>
+          </form>
+        </div>
+        <div id="clients" class="content-list"></div>
       </section>
 
       <section class="panel">
         <h2>Подключения</h2>
-        <div id="connections" class="list"></div>
+        <div id="connections" class="content-list"></div>
+      </section>
+
+      <section class="panel">
+        <h2>Доступ</h2>
+        <form id="credentials-form" class="settings-form">
+          <input id="settings-username" class="form-control" name="username" value="admin" autocomplete="username">
+          <input class="form-control" name="password" type="password" placeholder="Новый пароль" autocomplete="new-password">
+          <button class="btn btn-primary" type="submit">Сохранить</button>
+        </form>
+      </section>
+
+      <section class="panel">
+        <h2>События</h2>
+        <div id="events" class="content-list"></div>
       </section>
     </main>
 

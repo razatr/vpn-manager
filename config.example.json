@@ -5,7 +5,10 @@
   "publicUrl": "http://localhost:8080",
   "auth": {
     "enabled": false,
-    "adminToken": ""
+    "adminToken": "",
+    "username": "admin",
+    "passwordHash": "",
+    "passwordSalt": ""
   },
   "openvpn": {
     "helperPath": "./scripts/openvpn-manager.sh",
@@ -14,5 +17,11 @@
     "configPath": "/etc/openvpn/server/server.conf",
     "statusLogPath": "/run/openvpn-server/status.log",
     "profileDir": "/var/lib/vpn-manager/profiles/openvpn"
+  },
+  "vless": {
+    "helperPath": "./scripts/vless-manager.sh",
+    "helperUseSudo": false,
+    "configPath": "/etc/xray/config.json",
+    "profileDir": "/var/lib/vpn-manager/profiles/vless"
   }
 }

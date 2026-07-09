@@ -25,6 +25,45 @@ export class JsonStore {
     return db.clients.filter((client) => client.provider === provider);
   }
 
+  async syncClients(provider, externalClients) {
+    const db = await this.read();
+    const seen = new Set();
+
+    for (const external of externalClients) {
+      const name = external.name;
+      seen.add(name);
+      const status = normalizeExternalStatus(external);
+      const profilePath = external.profileExists ? external.profilePath : null;
+      const client = db.clients.find((item) => item.provider === provider && item.name === name);
+
+      if (client) {
+        client.status = status;
+        client.profilePath = profilePath;
+        client.revokedAt = status === "revoked" ? client.revokedAt || new Date().toISOString() : null;
+      } else {
+        db.clients.push({
+          id: crypto.randomUUID(),
+          provider,
+          name,
+          status,
+          createdAt: new Date().toISOString(),
+          revokedAt: status === "revoked" ? new Date().toISOString() : null,
+          profilePath
+        });
+      }
+    }
+
+    for (const client of db.clients.filter((item) => item.provider === provider && item.status !== "revoked")) {
+      if (!seen.has(client.name)) {
+        client.status = "missing";
+        client.profilePath = null;
+      }
+    }
+
+    await this.write(db);
+    return db.clients.filter((client) => client.provider === provider);
+  }
+
   async createClient({ provider, name, status = "registered", profilePath = null }) {
     const db = await this.read();
     const exists = db.clients.some(
@@ -126,4 +165,20 @@ export class JsonStore {
   async write(data) {
     await fs.writeFile(this.dbPath, `${JSON.stringify(data, null, 2)}\n`);
   }
+}
+
+function normalizeExternalStatus(client) {
+  if (client.status === "revoked") {
+    return "revoked";
+  }
+  if (client.status === "expired") {
+    return "expired";
+  }
+  if (!client.profileExists) {
+    return "missing_profile";
+  }
+  if (client.status === "valid") {
+    return "active";
+  }
+  return client.status || "registered";
 }

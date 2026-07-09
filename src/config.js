@@ -8,7 +8,10 @@ const defaultConfig = {
   publicUrl: "http://localhost:8080",
   auth: {
     enabled: false,
-    adminToken: ""
+    adminToken: "",
+    username: "admin",
+    passwordHash: "",
+    passwordSalt: ""
   },
   openvpn: {
     helperPath: "./scripts/openvpn-manager.sh",
@@ -17,12 +20,19 @@ const defaultConfig = {
     configPath: "/etc/openvpn/server/server.conf",
     statusLogPath: "/run/openvpn-server/status.log",
     profileDir: "/var/lib/vpn-manager/profiles/openvpn"
+  },
+  vless: {
+    helperPath: "./scripts/vless-manager.sh",
+    helperUseSudo: false,
+    configPath: "/etc/xray/config.json",
+    profileDir: "/var/lib/vpn-manager/profiles/vless"
   }
 };
 
 export function loadConfig(configPath) {
   const fileConfig = readJsonConfig(configPath);
   const config = merge(defaultConfig, fileConfig);
+  config.configPath = configPath ? path.resolve(configPath) : "";
 
   config.port = Number(process.env.PORT || config.port);
   config.host = process.env.HOST || config.host;
@@ -33,8 +43,23 @@ export function loadConfig(configPath) {
   if (!path.isAbsolute(config.openvpn.installScriptPath)) {
     config.openvpn.installScriptPath = path.resolve(config.openvpn.installScriptPath);
   }
+  if (!path.isAbsolute(config.vless.helperPath)) {
+    config.vless.helperPath = path.resolve(config.vless.helperPath);
+  }
 
   return config;
+}
+
+export function saveConfig(config) {
+  if (!config.configPath) {
+    const error = new Error("Config file path is not available");
+    error.statusCode = 500;
+    throw error;
+  }
+
+  const output = { ...config };
+  delete output.configPath;
+  fs.writeFileSync(config.configPath, `${JSON.stringify(output, null, 2)}\n`);
 }
 
 function readJsonConfig(configPath) {

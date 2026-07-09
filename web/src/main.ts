@@ -1,8 +1,12 @@
+import "bootstrap/dist/css/bootstrap.min.css";
 import "./styles.css";
 
 type ServerStatus = {
   ok: boolean;
   publicUrl: string;
+  auth: {
+    username: string;
+  };
   providers: {
     openvpn: {
       installed: boolean;
@@ -12,14 +16,22 @@ type ServerStatus = {
       statusLogExists: boolean;
       profileDir: string;
     };
+    vless?: {
+      installed: boolean;
+      active: boolean;
+      configPath: string;
+      profileDir: string;
+    };
   };
 };
+
+type ClientStatus = "active" | "registered" | "missing_profile" | "missing" | "revoked" | "expired" | string;
 
 type Client = {
   id: string;
   provider: "openvpn";
   name: string;
-  status: string;
+  status: ClientStatus;
   createdAt: string;
   revokedAt: string | null;
   profilePath: string | null;
@@ -47,13 +59,15 @@ type State = {
   clients: Client[];
   events: EventItem[];
   connections: Connection[];
+  busy: boolean;
 };
 
 const state: State = {
   server: null,
   clients: [],
   events: [],
-  connections: []
+  connections: [],
+  busy: false
 };
 
 const refreshButton = mustElement<HTMLButtonElement>("refresh");
@@ -62,14 +76,18 @@ const clientForm = mustElement<HTMLFormElement>("client-form");
 const clientNameInput = mustElement<HTMLInputElement>("client-name");
 const loginPanel = mustElement<HTMLElement>("login-panel");
 const loginForm = mustElement<HTMLFormElement>("login-form");
-const loginTokenInput = mustElement<HTMLInputElement>("admin-token");
+const loginUsernameInput = mustElement<HTMLInputElement>("login-username");
+const loginPasswordInput = mustElement<HTMLInputElement>("login-password");
 const loginError = mustElement<HTMLElement>("login-error");
 const appShell = document.querySelector<HTMLElement>(".shell");
 const setupPanel = mustElement<HTMLElement>("setup-panel");
 const setupForm = mustElement<HTMLFormElement>("setup-form");
+const credentialsForm = mustElement<HTMLFormElement>("credentials-form");
+const globalBusy = mustElement<HTMLElement>("global-busy");
+const notice = mustElement<HTMLElement>("notice");
 
 refreshButton.addEventListener("click", () => {
-  void load();
+  void withBusy("Обновляю состояние...", load);
 });
 
 logoutButton.addEventListener("click", async () => {
@@ -80,20 +98,25 @@ logoutButton.addEventListener("click", async () => {
 loginForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   loginError.hidden = true;
-  const response = await fetch("/api/auth/login", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ token: loginTokenInput.value })
+  await withBusy("Вхожу...", async () => {
+    const response = await fetch("/api/auth/login", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        username: loginUsernameInput.value.trim(),
+        password: loginPasswordInput.value
+      })
+    });
+
+    if (!response.ok) {
+      loginError.hidden = false;
+      return;
+    }
+
+    loginPasswordInput.value = "";
+    showApp();
+    await load();
   });
-
-  if (!response.ok) {
-    loginError.hidden = false;
-    return;
-  }
-
-  loginTokenInput.value = "";
-  showApp();
-  await load();
 });
 
 clientForm.addEventListener("submit", async (event) => {
@@ -103,44 +126,74 @@ clientForm.addEventListener("submit", async (event) => {
     return;
   }
 
-  const response = await fetch("/api/openvpn/clients", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ name })
+  await withBusy(`Создаю профиль ${name}...`, async () => {
+    const response = await fetch("/api/openvpn/clients", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ name })
+    });
+
+    if (!response.ok) {
+      await showResponseError(response, "Ошибка создания клиента");
+      return;
+    }
+
+    clientNameInput.value = "";
+    showNotice(`Профиль ${name} создан`);
+    await load();
   });
-
-  if (!response.ok) {
-    const data = await response.json() as { message?: string; error?: string };
-    window.alert(data.message || data.error || "Ошибка создания клиента");
-    return;
-  }
-
-  clientNameInput.value = "";
-  await load();
 });
 
 setupForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   const form = new FormData(setupForm);
-  const response = await fetch("/api/setup/openvpn", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({
-      publicHost: String(form.get("publicHost") || "").trim(),
-      port: Number(form.get("port") || 1194),
-      protocol: String(form.get("protocol") || "udp"),
-      dns: Number(form.get("dns") || 3),
-      firstClient: String(form.get("firstClient") || "admin").trim()
-    })
+  const firstClient = String(form.get("firstClient") || "admin").trim();
+
+  await withBusy("Устанавливаю OpenVPN. Это может занять несколько минут...", async () => {
+    const response = await fetch("/api/setup/openvpn", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        publicHost: String(form.get("publicHost") || "").trim(),
+        port: Number(form.get("port") || 1194),
+        protocol: String(form.get("protocol") || "udp"),
+        dns: Number(form.get("dns") || 3),
+        firstClient
+      })
+    });
+
+    if (!response.ok) {
+      await showResponseError(response, "Ошибка установки OpenVPN");
+      return;
+    }
+
+    showNotice(`OpenVPN установлен, первый профиль: ${firstClient}`);
+    await load();
   });
+});
 
-  if (!response.ok) {
-    const data = await response.json() as { message?: string; error?: string };
-    window.alert(data.message || data.error || "Ошибка установки OpenVPN");
-    return;
-  }
+credentialsForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const form = new FormData(credentialsForm);
+  const username = String(form.get("username") || "").trim();
+  const password = String(form.get("password") || "");
 
-  await load();
+  await withBusy("Сохраняю учётные данные...", async () => {
+    const response = await fetch("/api/auth/credentials", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ username, password })
+    });
+
+    if (!response.ok) {
+      await showResponseError(response, "Не удалось сохранить логин и пароль");
+      return;
+    }
+
+    credentialsForm.reset();
+    mustElement<HTMLInputElement>("settings-username").value = username;
+    showNotice("Логин и пароль сохранены");
+  });
 });
 
 mustElement("clients").addEventListener("click", async (event) => {
@@ -154,17 +207,19 @@ mustElement("clients").addEventListener("click", async (event) => {
     return;
   }
 
-  const response = await fetch(`/api/openvpn/clients/${encodeURIComponent(client)}/revoke`, {
-    method: "POST"
+  await withBusy(`Отзываю профиль ${client}...`, async () => {
+    const response = await fetch(`/api/openvpn/clients/${encodeURIComponent(client)}/revoke`, {
+      method: "POST"
+    });
+
+    if (!response.ok) {
+      await showResponseError(response, "Ошибка отзыва клиента");
+      return;
+    }
+
+    showNotice(`Профиль ${client} отозван`);
+    await load();
   });
-
-  if (!response.ok) {
-    const data = await response.json() as { message?: string; error?: string };
-    window.alert(data.message || data.error || "Ошибка отзыва клиента");
-    return;
-  }
-
-  await load();
 });
 
 async function load(): Promise<void> {
@@ -200,67 +255,181 @@ function render(): void {
   }
 
   const openvpn = state.server.providers.openvpn;
+  const vless = state.server.providers.vless;
   mustElement("server-state").textContent = state.server.ok ? "API работает" : "API недоступен";
-  mustElement("openvpn-installed").textContent = openvpn.installed ? "да" : "нет";
-  mustElement("openvpn-active").textContent = openvpn.active ? "запущен" : "не запущен";
+  mustElement<HTMLInputElement>("settings-username").value = state.server.auth.username;
+  setBadge("openvpn-installed", openvpn.installed ? "Установлен" : "Не установлен", openvpn.installed ? "success" : "secondary");
+  setBadge("openvpn-active", openvpn.active ? "Запущен" : "Остановлен", openvpn.active ? "success" : "danger");
   mustElement("openvpn-status-log").textContent = openvpn.statusLogExists ? openvpn.statusLogPath : "не найден";
   mustElement("openvpn-profile-dir").textContent = openvpn.profileDir;
+  if (vless) {
+    setBadge("vless-installed", vless.installed ? "Установлен" : "Не установлен", vless.installed ? "success" : "secondary");
+    setBadge("vless-active", vless.active ? "Запущен" : "Остановлен", vless.active ? "success" : "danger");
+    mustElement("vless-config").textContent = vless.configPath;
+    mustElement("vless-profile-dir").textContent = vless.profileDir;
+  }
   setupPanel.hidden = openvpn.installed;
 
   mustElement("clients").innerHTML = state.clients.length
-    ? state.clients.map(renderClient).join("")
-    : `<p class="muted">Клиентов пока нет</p>`;
+    ? renderClientsTable(state.clients)
+    : `<div class="empty-state">Клиентов пока нет</div>`;
 
   mustElement("events").innerHTML = state.events.length
     ? state.events.map(renderEvent).join("")
-    : `<p class="muted">Событий пока нет</p>`;
+    : `<div class="empty-state">Событий пока нет</div>`;
 
   mustElement("connections").innerHTML = state.connections.length
-    ? state.connections.map(renderConnection).join("")
-    : `<p class="muted">Активных подключений пока нет</p>`;
+    ? renderConnectionsTable(state.connections)
+    : `<div class="empty-state">Активных подключений пока нет</div>`;
 }
 
-function renderClient(client: Client): string {
-  const profileLink = client.profilePath
-    ? `<a href="/api/openvpn/clients/${encodeURIComponent(client.name)}/profile">Скачать</a>`
-    : `<span class="muted">Профиль будет доступен после генерации на сервере</span>`;
+function renderClientsTable(clients: Client[]): string {
+  return `
+    <div class="table-responsive">
+      <table class="table align-middle">
+        <thead>
+          <tr>
+            <th>Клиент</th>
+            <th>Статус</th>
+            <th>Профиль</th>
+            <th class="text-end">Действия</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${clients.map(renderClientRow).join("")}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+function renderClientRow(client: Client): string {
+  const canDownload = Boolean(client.profilePath) && client.status !== "revoked";
+  const profileLink = canDownload
+    ? `<a class="btn btn-sm btn-outline-primary" href="/api/openvpn/clients/${encodeURIComponent(client.name)}/profile">Скачать</a>`
+    : `<span class="text-secondary">нет файла</span>`;
   const revokeButton = client.status === "revoked"
-    ? `<span class="danger">отозван</span>`
-    : `<button type="button" data-action="revoke" data-client="${escapeHtml(client.name)}">Отозвать</button>`;
+    ? `<span class="text-secondary">отозван</span>`
+    : `<button class="btn btn-sm btn-outline-danger" type="button" data-action="revoke" data-client="${escapeHtml(client.name)}">Отозвать</button>`;
 
   return `
-    <article class="list-item">
-      <div>
-        <strong>${escapeHtml(client.name)}</strong>
-        <span class="muted">${escapeHtml(client.status)}</span>
-      </div>
-      <div class="row-actions">
-        ${profileLink}
-        ${revokeButton}
-      </div>
-    </article>
+    <tr>
+      <td><strong>${escapeHtml(client.name)}</strong></td>
+      <td>${statusBadge(client.status)}</td>
+      <td>${profileLink}</td>
+      <td class="text-end">${revokeButton}</td>
+    </tr>
+  `;
+}
+
+function renderConnectionsTable(connections: Connection[]): string {
+  return `
+    <div class="table-responsive">
+      <table class="table align-middle">
+        <thead>
+          <tr>
+            <th>Клиент</th>
+            <th>VPN IP</th>
+            <th>Реальный адрес</th>
+            <th>Получено</th>
+            <th>Отправлено</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${connections.map((connection) => `
+            <tr>
+              <td><strong>${escapeHtml(connection.commonName)}</strong></td>
+              <td>${escapeHtml(connection.virtualAddress || "-")}</td>
+              <td>${escapeHtml(connection.realAddress || "-")}</td>
+              <td>${formatBytes(connection.bytesReceived)}</td>
+              <td>${formatBytes(connection.bytesSent)}</td>
+            </tr>
+          `).join("")}
+        </tbody>
+      </table>
+    </div>
   `;
 }
 
 function renderEvent(event: EventItem): string {
   return `
-    <article class="list-item">
+    <article class="event-item">
       <span>${escapeHtml(event.message)}</span>
-      <time class="muted">${escapeHtml(event.createdAt)}</time>
+      <time>${formatDate(event.createdAt)}</time>
     </article>
   `;
 }
 
-function renderConnection(connection: Connection): string {
-  return `
-    <article class="list-item">
-      <div>
-        <strong>${escapeHtml(connection.commonName)}</strong>
-        <span class="muted">${escapeHtml(connection.virtualAddress)}</span>
-      </div>
-      <span class="muted">${escapeHtml(connection.realAddress)}</span>
-    </article>
-  `;
+function statusBadge(status: ClientStatus): string {
+  const map: Record<string, { label: string; tone: string }> = {
+    active: { label: "Активен", tone: "success" },
+    registered: { label: "Зарегистрирован", tone: "info" },
+    missing_profile: { label: "Нет файла профиля", tone: "warning" },
+    missing: { label: "Нет в OpenVPN", tone: "warning" },
+    revoked: { label: "Отозван", tone: "secondary" },
+    expired: { label: "Истёк", tone: "danger" }
+  };
+  const item = map[status] || { label: status, tone: "secondary" };
+  return `<span class="badge text-bg-${item.tone}">${escapeHtml(item.label)}</span>`;
+}
+
+function setBadge(id: string, text: string, tone: string): void {
+  const element = mustElement(id);
+  element.className = `badge text-bg-${tone}`;
+  element.textContent = text;
+}
+
+async function withBusy(message: string, action: () => Promise<void>): Promise<void> {
+  state.busy = true;
+  setBusy(true, message);
+  try {
+    await action();
+  } finally {
+    state.busy = false;
+    setBusy(false, "");
+  }
+}
+
+function setBusy(isBusy: boolean, message: string): void {
+  globalBusy.hidden = !isBusy;
+  mustElement("busy-message").textContent = message;
+  for (const element of document.querySelectorAll<HTMLButtonElement>("button")) {
+    element.disabled = isBusy;
+  }
+}
+
+function showNotice(message: string): void {
+  notice.hidden = false;
+  notice.textContent = message;
+  window.setTimeout(() => {
+    notice.hidden = true;
+  }, 5000);
+}
+
+async function showResponseError(response: Response, fallback: string): Promise<void> {
+  const data = await response.json().catch(() => ({})) as { message?: string; error?: string };
+  showNotice(data.message || data.error || fallback);
+}
+
+function formatDate(value: string): string {
+  return new Intl.DateTimeFormat("ru-RU", {
+    dateStyle: "short",
+    timeStyle: "medium"
+  }).format(new Date(value));
+}
+
+function formatBytes(value: number): string {
+  if (!Number.isFinite(value)) {
+    return "0 B";
+  }
+  const units = ["B", "KB", "MB", "GB"];
+  let amount = value;
+  let unit = 0;
+  while (amount >= 1024 && unit < units.length - 1) {
+    amount /= 1024;
+    unit += 1;
+  }
+  return `${amount.toFixed(unit === 0 ? 0 : 1)} ${units[unit]}`;
 }
 
 function escapeHtml(value: string): string {
@@ -286,7 +455,7 @@ function showLogin(): void {
   if (appShell) {
     appShell.hidden = true;
   }
-  loginTokenInput.focus();
+  loginPasswordInput.focus();
 }
 
 function showApp(): void {
@@ -296,6 +465,6 @@ function showApp(): void {
   }
 }
 
-load().catch((error: unknown) => {
+void withBusy("Загружаю состояние...", load).catch((error: unknown) => {
   mustElement("server-state").textContent = error instanceof Error ? error.message : "Ошибка загрузки";
 });

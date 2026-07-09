@@ -227,7 +227,14 @@ case "${COMMAND}" in
         else
           printf ','
         fi
-        printf '{"name":%s,"status":%s}' "$(json_string "${name}")" "$(json_string "${status}")"
+        profile_path="${PROFILE_DIR}/${name}.ovpn"
+        profile_exists="false"
+        [[ -f "${profile_path}" ]] && profile_exists="true"
+        printf '{"name":%s,"status":%s,"profilePath":%s,"profileExists":%s}' \
+          "$(json_string "${name}")" \
+          "$(json_string "${status}")" \
+          "$(json_string "${profile_path}")" \
+          "$(json_bool "${profile_exists}")"
       done < "${INDEX_FILE}"
     fi
     printf ']\n'
