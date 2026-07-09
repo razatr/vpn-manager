@@ -147,6 +147,7 @@ config.openvpn.helperPath = '${HELPER_PATH}';
 config.openvpn.helperUseSudo = true;
 config.openvpn.installScriptPath = '${HELPER_DIR}/third_party/openvpn-install/openvpn-install.sh';
 config.openvpn.profileDir = '${DATA_DIR}/profiles/openvpn';
+config.openvpn.profileGroup = '${APP_USER}';
 config.vless.helperPath = '${VLESS_HELPER_PATH}';
 config.vless.helperUseSudo = true;
 config.vless.configPath = '/etc/xray/config.json';

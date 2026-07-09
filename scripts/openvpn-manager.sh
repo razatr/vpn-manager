@@ -15,6 +15,7 @@ CLIENT_COMMON="${SERVER_DIR}/client-common.txt"
 INDEX_FILE="${EASY_RSA_DIR}/pki/index.txt"
 SERVICE_NAME="${OPENVPN_SERVICE_NAME:-openvpn-server@server.service}"
 INSTALL_LOG="${VPN_MANAGER_OPENVPN_INSTALL_LOG:-/var/log/vpn-manager/openvpn-install.log}"
+PROFILE_GROUP="${VPN_MANAGER_PROFILE_GROUP:-vpn-manager}"
 
 json_bool() {
   if [[ "$1" == "true" ]]; then
@@ -83,6 +84,14 @@ ensure_status_log_config() {
   mkdir -p "$(dirname "${STATUS_LOG}")"
   if [[ -f "${SERVER_CONF}" ]] && ! grep -qE '^status ' "${SERVER_CONF}"; then
     printf 'status %s 10\n' "${STATUS_LOG}" >> "${SERVER_CONF}"
+  fi
+}
+
+secure_profile() {
+  local profile_path="$1"
+  chmod 0640 "${profile_path}"
+  if getent group "${PROFILE_GROUP}" >/dev/null 2>&1; then
+    chgrp "${PROFILE_GROUP}" "${profile_path}" 2>/dev/null || true
   fi
 }
 
@@ -174,7 +183,7 @@ install_openvpn() {
   profile_path="${PROFILE_DIR}/${first_client}.ovpn"
   if [[ -f "${generated_profile}" ]]; then
     mv "${generated_profile}" "${profile_path}"
-    chmod 0600 "${profile_path}"
+    secure_profile "${profile_path}"
   else
     echo "OpenVPN installer did not create ${first_client}.ovpn. Log: ${INSTALL_LOG}" >&2
     tail -80 "${INSTALL_LOG}" >&2 || true
@@ -259,7 +268,7 @@ case "${COMMAND}" in
     ./easyrsa --batch --days=3650 build-client-full "${CLIENT}" nopass
     profile_path="${PROFILE_DIR}/${CLIENT}.ovpn"
     grep -vh '^#' "${CLIENT_COMMON}" "${EASY_RSA_DIR}/pki/inline/private/${CLIENT}.inline" > "${profile_path}"
-    chmod 0600 "${profile_path}"
+    secure_profile "${profile_path}"
     printf '{"name":%s,"profilePath":%s}\n' "$(json_string "${CLIENT}")" "$(json_string "${profile_path}")"
     ;;
   revoke-client)

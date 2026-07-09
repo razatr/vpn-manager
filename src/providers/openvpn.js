@@ -103,7 +103,8 @@ export class OpenVPNProvider {
     const helperEnv = {
       OPENVPN_STATUS_LOG: this.config.statusLogPath,
       VPN_MANAGER_PROFILE_DIR: this.config.profileDir,
-      VPN_MANAGER_OPENVPN_INSTALL_SCRIPT: this.config.installScriptPath
+      VPN_MANAGER_OPENVPN_INSTALL_SCRIPT: this.config.installScriptPath,
+      VPN_MANAGER_PROFILE_GROUP: this.config.profileGroup || "vpn-manager"
     };
     const commandArgs = this.config.helperUseSudo
       ? [

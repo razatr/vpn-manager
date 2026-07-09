@@ -174,7 +174,7 @@ async function handleApi({ req, res, url, config, store, providers }) {
   if (req.method === "GET" && /^\/api\/openvpn\/clients\/[^/]+\/profile$/.test(url.pathname)) {
     const name = validateClientName(decodeURIComponent(url.pathname.split("/")[4]));
     const client = await store.findClient({ provider: "openvpn", name });
-    if (!client || !client.profilePath || !fs.existsSync(client.profilePath)) {
+    if (!client || !client.profilePath || !canRead(client.profilePath)) {
       sendJson(res, 404, { error: "profile_not_found" });
       return;
     }
@@ -183,7 +183,12 @@ async function handleApi({ req, res, url, config, store, providers }) {
       "content-type": "application/x-openvpn-profile",
       "content-disposition": `attachment; filename="${client.name}.ovpn"`
     });
-    fs.createReadStream(client.profilePath).pipe(res);
+    fs.createReadStream(client.profilePath)
+      .on("error", (error) => {
+        console.error(error);
+        res.destroy(error);
+      })
+      .pipe(res);
     return;
   }
 
@@ -258,6 +263,15 @@ async function serveStatic(url, res) {
 function sendJson(res, status, data) {
   res.writeHead(status, { "content-type": "application/json; charset=utf-8" });
   res.end(JSON.stringify(data, null, 2));
+}
+
+function canRead(filePath) {
+  try {
+    fs.accessSync(filePath, fs.constants.R_OK);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function isAuthorized(req, config) {

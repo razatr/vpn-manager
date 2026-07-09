@@ -19,7 +19,8 @@ const defaultConfig = {
     installScriptPath: "./third_party/openvpn-install/openvpn-install.sh",
     configPath: "/etc/openvpn/server/server.conf",
     statusLogPath: "/run/openvpn-server/status.log",
-    profileDir: "/var/lib/vpn-manager/profiles/openvpn"
+    profileDir: "/var/lib/vpn-manager/profiles/openvpn",
+    profileGroup: "vpn-manager"
   },
   vless: {
     helperPath: "./scripts/vless-manager.sh",
