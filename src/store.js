@@ -28,8 +28,9 @@ export class JsonStore {
   async syncClients(provider, externalClients) {
     const db = await this.read();
     const seen = new Set();
+    db.clients = db.clients.filter((client) => !isInternalClient(provider, client.name));
 
-    for (const external of externalClients) {
+    for (const external of externalClients.filter((client) => !isInternalClient(provider, client.name))) {
       const name = external.name;
       seen.add(name);
       const status = normalizeExternalStatus(external);
@@ -181,4 +182,8 @@ function normalizeExternalStatus(client) {
     return "active";
   }
   return client.status || "registered";
+}
+
+function isInternalClient(provider, name) {
+  return provider === "openvpn" && name === "server";
 }

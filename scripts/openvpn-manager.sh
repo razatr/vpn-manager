@@ -230,6 +230,7 @@ case "${COMMAND}" in
           *) continue ;;
         esac
         name="$(client_name_from_index_line "${line}")"
+        [[ "${name}" == "server" ]] && continue
         status="$(client_status_from_index_line "${line}")"
         if [[ "${first}" == "true" ]]; then
           first="false"
