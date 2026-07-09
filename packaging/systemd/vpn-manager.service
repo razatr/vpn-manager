@@ -18,6 +18,7 @@ ProtectSystem=full
 ProtectHome=true
 RuntimeDirectory=openvpn-server
 ReadWritePaths=/var/lib/vpn-manager /var/log/vpn-manager /etc/openvpn /run/openvpn-server
+ReadWritePaths=/etc/systemd/system /etc/sysctl.d
 
 [Install]
 WantedBy=multi-user.target

@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
+export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:${PATH}"
 
 COMMAND="${1:-}"
 CLIENT="${2:-}"
@@ -144,6 +145,9 @@ install_openvpn() {
   fi
 
   mkdir -p "$(dirname "${INSTALL_LOG}")"
+  install_work_dir="$(mktemp -d)"
+  trap 'rm -rf "${install_work_dir:-}"' EXIT
+  cp "${INSTALL_SCRIPT}" "${install_work_dir}/openvpn-install.sh"
   if ! VPN_MANAGER_AUTO_INSTALL=y \
     VPN_MANAGER_APPROVE_INSTALL=y \
     VPN_MANAGER_PUBLIC_HOST="${public_host}" \
@@ -152,18 +156,28 @@ install_openvpn() {
     VPN_MANAGER_OPENVPN_DNS="${dns}" \
     VPN_MANAGER_OPENVPN_CUSTOM_DNS="${custom_dns}" \
     VPN_MANAGER_OPENVPN_FIRST_CLIENT="${first_client}" \
-    bash "${INSTALL_SCRIPT}" > "${INSTALL_LOG}" 2>&1; then
+    bash "${install_work_dir}/openvpn-install.sh" > "${INSTALL_LOG}" 2>&1; then
     echo "OpenVPN installer failed. Log: ${INSTALL_LOG}" >&2
     tail -80 "${INSTALL_LOG}" >&2 || true
     exit 5
   fi
 
   mkdir -p "${PROFILE_DIR}"
-  generated_profile="$(dirname "${INSTALL_SCRIPT}")/${first_client}.ovpn"
+  generated_profile="${install_work_dir}/${first_client}.ovpn"
   profile_path="${PROFILE_DIR}/${first_client}.ovpn"
   if [[ -f "${generated_profile}" ]]; then
     mv "${generated_profile}" "${profile_path}"
     chmod 0600 "${profile_path}"
+  else
+    echo "OpenVPN installer did not create ${first_client}.ovpn. Log: ${INSTALL_LOG}" >&2
+    tail -80 "${INSTALL_LOG}" >&2 || true
+    exit 5
+  fi
+
+  if [[ ! -f "${SERVER_CONF}" ]]; then
+    echo "OpenVPN server config was not created. Log: ${INSTALL_LOG}" >&2
+    tail -80 "${INSTALL_LOG}" >&2 || true
+    exit 5
   fi
 
   printf '{"installed":true,"firstClient":%s,"profilePath":%s}\n' \
