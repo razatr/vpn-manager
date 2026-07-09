@@ -34,6 +34,42 @@ async function handleApi({ req, res, url, config, store, providers }) {
     return;
   }
 
+  if (req.method === "POST" && url.pathname === "/api/auth/login") {
+    const body = await readJson(req);
+    if (!config.auth.enabled || body.token === config.auth.adminToken) {
+      res.writeHead(204, {
+        "set-cookie": cookieHeader("vm_session", config.auth.enabled ? config.auth.adminToken : "dev", {
+          httpOnly: true,
+          sameSite: "Strict",
+          path: "/"
+        })
+      });
+      res.end();
+      return;
+    }
+
+    sendJson(res, 401, { error: "unauthorized" });
+    return;
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/auth/logout") {
+    res.writeHead(204, {
+      "set-cookie": cookieHeader("vm_session", "", {
+        httpOnly: true,
+        sameSite: "Strict",
+        path: "/",
+        maxAge: 0
+      })
+    });
+    res.end();
+    return;
+  }
+
+  if (!isAuthorized(req, config)) {
+    sendJson(res, 401, { error: "unauthorized" });
+    return;
+  }
+
   if (req.method === "GET" && url.pathname === "/api/server/status") {
     const openvpn = await providers.openvpn.status();
     sendJson(res, 200, {
@@ -48,6 +84,25 @@ async function handleApi({ req, res, url, config, store, providers }) {
     sendJson(res, 200, {
       providers: Object.keys(providers).map((name) => ({ name }))
     });
+    return;
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/setup/openvpn") {
+    const body = await readJson(req);
+    const setup = await providers.openvpn.install(validateOpenVPNSetup(body));
+    const firstClientName = setup.firstClient || body.firstClient || "admin";
+    const client = await store.createClient({
+      provider: "openvpn",
+      name: firstClientName,
+      status: "active",
+      profilePath: setup.profilePath || null
+    });
+    await store.addEvent({
+      type: "openvpn.installed",
+      provider: "openvpn",
+      message: `OpenVPN installed with first client ${firstClientName}`
+    });
+    sendJson(res, 201, { setup, client });
     return;
   }
 
@@ -149,6 +204,53 @@ function sendJson(res, status, data) {
   res.end(JSON.stringify(data, null, 2));
 }
 
+function isAuthorized(req, config) {
+  if (!config.auth.enabled) {
+    return true;
+  }
+
+  const authorization = req.headers.authorization || "";
+  if (authorization === `Bearer ${config.auth.adminToken}`) {
+    return true;
+  }
+
+  const cookies = parseCookies(req.headers.cookie || "");
+  return cookies.vm_session === config.auth.adminToken;
+}
+
+function parseCookies(header) {
+  return Object.fromEntries(
+    header
+      .split(";")
+      .map((part) => part.trim())
+      .filter(Boolean)
+      .map((part) => {
+        const separator = part.indexOf("=");
+        if (separator === -1) {
+          return [part, ""];
+        }
+        return [part.slice(0, separator), decodeURIComponent(part.slice(separator + 1))];
+      })
+  );
+}
+
+function cookieHeader(name, value, options = {}) {
+  const parts = [`${name}=${encodeURIComponent(value)}`];
+  if (options.maxAge !== undefined) {
+    parts.push(`Max-Age=${options.maxAge}`);
+  }
+  if (options.httpOnly) {
+    parts.push("HttpOnly");
+  }
+  if (options.sameSite) {
+    parts.push(`SameSite=${options.sameSite}`);
+  }
+  if (options.path) {
+    parts.push(`Path=${options.path}`);
+  }
+  return parts.join("; ");
+}
+
 async function readJson(req) {
   const chunks = [];
   for await (const chunk of req) {
@@ -169,4 +271,44 @@ function validateClientName(name) {
     throw error;
   }
   return name;
+}
+
+function validateOpenVPNSetup(body) {
+  const firstClient = validateClientName(body.firstClient || "admin");
+  const protocol = body.protocol || "udp";
+  if (!["udp", "tcp"].includes(protocol)) {
+    const error = new Error("Protocol must be udp or tcp");
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const port = Number(body.port || 1194);
+  if (!Number.isInteger(port) || port < 1 || port > 65535) {
+    const error = new Error("Port must be between 1 and 65535");
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const dns = Number(body.dns || 3);
+  if (!Number.isInteger(dns) || dns < 1 || dns > 8) {
+    const error = new Error("DNS selection must be between 1 and 8");
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const publicHost = body.publicHost || "";
+  if (publicHost && !/^[a-zA-Z0-9._-]+$/.test(publicHost)) {
+    const error = new Error("Public host must be a hostname or IPv4 address");
+    error.statusCode = 400;
+    throw error;
+  }
+
+  return {
+    publicHost,
+    port,
+    protocol,
+    dns,
+    customDns: body.customDns || "",
+    firstClient
+  };
 }

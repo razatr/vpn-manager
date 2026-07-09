@@ -33,6 +33,35 @@ export class OpenVPNProvider {
     return this.runJson(["create-client", name]);
   }
 
+  async install(options) {
+    if (!(await exists(this.config.helperPath))) {
+      const error = new Error(`OpenVPN helper not found: ${this.config.helperPath}`);
+      error.statusCode = 500;
+      throw error;
+    }
+
+    const args = [
+      "install",
+      "--port",
+      String(options.port || 1194),
+      "--protocol",
+      options.protocol || "udp",
+      "--dns",
+      String(options.dns || 3),
+      "--first-client",
+      options.firstClient || "admin"
+    ];
+
+    if (options.publicHost) {
+      args.push("--public-host", options.publicHost);
+    }
+    if (options.customDns) {
+      args.push("--custom-dns", options.customDns);
+    }
+
+    return this.runJson(args);
+  }
+
   async revokeClient(name) {
     const status = await this.status();
     if (!status.installed) {

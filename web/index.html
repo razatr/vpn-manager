@@ -6,13 +6,25 @@
     <title>VPN Manager</title>
   </head>
   <body>
+    <section id="login-panel" class="login-panel" hidden>
+      <form id="login-form" class="login-box">
+        <h1>VPN Manager</h1>
+        <input id="admin-token" name="token" type="password" placeholder="Admin token" autocomplete="current-password">
+        <button type="submit">Войти</button>
+        <p id="login-error" class="danger" hidden>Неверный token</p>
+      </form>
+    </section>
+
     <main class="shell">
       <section class="topbar">
         <div>
           <h1>VPN Manager</h1>
           <p id="server-state">Загрузка состояния...</p>
         </div>
-        <button id="refresh" type="button">Обновить</button>
+        <div class="row-actions">
+          <button id="refresh" type="button">Обновить</button>
+          <button id="logout" type="button">Выйти</button>
+        </div>
       </section>
 
       <section class="panel">
@@ -35,6 +47,26 @@
             <dd id="openvpn-profile-dir">-</dd>
           </div>
         </dl>
+      </section>
+
+      <section id="setup-panel" class="panel" hidden>
+        <h2>Первичная настройка</h2>
+        <form id="setup-form" class="setup-form">
+          <input id="public-host" name="publicHost" placeholder="example.com или IP" autocomplete="off">
+          <input id="openvpn-port" name="port" type="number" min="1" max="65535" value="1194">
+          <select id="openvpn-protocol" name="protocol">
+            <option value="udp">UDP</option>
+            <option value="tcp">TCP</option>
+          </select>
+          <select id="openvpn-dns" name="dns">
+            <option value="3">1.1.1.1</option>
+            <option value="2">Google</option>
+            <option value="1">System</option>
+            <option value="7">AdGuard</option>
+          </select>
+          <input id="first-client" name="firstClient" value="admin" autocomplete="off">
+          <button type="submit">Установить OpenVPN</button>
+        </form>
       </section>
 
       <section class="panel">

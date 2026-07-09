@@ -11,8 +11,11 @@ if readlink /proc/$$/exe | grep -q "dash"; then
 	exit
 fi
 
-# Discard stdin. Needed when running from a one-liner which includes a newline
-read -N 999999 -t 0.001
+# Discard stdin. Needed when running from a one-liner which includes a newline.
+# VPN Manager disables this in auto mode because stdin can contain scripted answers.
+if [[ "${VPN_MANAGER_AUTO_INSTALL:-}" != "y" ]]; then
+	read -N 999999 -t 0.001
+fi
 
 # Detect OS
 # $os_version variables aren't always in use, but are kept here for convenience
@@ -115,7 +118,11 @@ if [[ ! -e /etc/openvpn/server/server.conf ]]; then
 		echo "This server is behind NAT. What is the public IPv4 address or hostname?"
 		# Get public IP and sanitize with grep
 		get_public_ip=$(grep -m 1 -oE '^[0-9]{1,3}(\.[0-9]{1,3}){3}$' <<< "$(wget -T 10 -t 1 -4qO- "http://ip1.dynupdate.no-ip.com/" || curl -m 10 -4Ls "http://ip1.dynupdate.no-ip.com/")")
-		read -p "Public IPv4 address / hostname [$get_public_ip]: " public_ip
+		if [[ -n "${VPN_MANAGER_PUBLIC_HOST:-}" ]]; then
+			public_ip="${VPN_MANAGER_PUBLIC_HOST}"
+		else
+			read -p "Public IPv4 address / hostname [$get_public_ip]: " public_ip
+		fi
 		# If the checkip service is unavailable and user didn't provide input, ask again
 		until [[ -n "$get_public_ip" || -n "$public_ip" ]]; do
 			echo "Invalid input."
@@ -145,7 +152,15 @@ if [[ ! -e /etc/openvpn/server/server.conf ]]; then
 	echo "Which protocol should OpenVPN use?"
 	echo "   1) UDP (recommended)"
 	echo "   2) TCP"
-	read -p "Protocol [1]: " protocol
+	if [[ -n "${VPN_MANAGER_OPENVPN_PROTOCOL:-}" ]]; then
+		case "${VPN_MANAGER_OPENVPN_PROTOCOL}" in
+			udp) protocol="1" ;;
+			tcp) protocol="2" ;;
+			*) protocol="${VPN_MANAGER_OPENVPN_PROTOCOL}" ;;
+		esac
+	else
+		read -p "Protocol [1]: " protocol
+	fi
 	until [[ -z "$protocol" || "$protocol" =~ ^[12]$ ]]; do
 		echo "$protocol: invalid selection."
 		read -p "Protocol [1]: " protocol
@@ -160,7 +175,11 @@ if [[ ! -e /etc/openvpn/server/server.conf ]]; then
 	esac
 	echo
 	echo "What port should OpenVPN listen on?"
-	read -p "Port [1194]: " port
+	if [[ -n "${VPN_MANAGER_OPENVPN_PORT:-}" ]]; then
+		port="${VPN_MANAGER_OPENVPN_PORT}"
+	else
+		read -p "Port [1194]: " port
+	fi
 	until [[ -z "$port" || "$port" =~ ^[0-9]+$ && "$port" -le 65535 ]]; do
 		echo "$port: invalid port."
 		read -p "Port [1194]: " port
@@ -176,7 +195,11 @@ if [[ ! -e /etc/openvpn/server/server.conf ]]; then
 	echo "   6) Gcore"
 	echo "   7) AdGuard"
 	echo "   8) Specify custom resolvers"
-	read -p "DNS server [1]: " dns
+	if [[ -n "${VPN_MANAGER_OPENVPN_DNS:-}" ]]; then
+		dns="${VPN_MANAGER_OPENVPN_DNS}"
+	else
+		read -p "DNS server [1]: " dns
+	fi
 	until [[ -z "$dns" || "$dns" =~ ^[1-8]$ ]]; do
 		echo "$dns: invalid selection."
 		read -p "DNS server [1]: " dns
@@ -186,7 +209,11 @@ if [[ ! -e /etc/openvpn/server/server.conf ]]; then
 		echo
 		until [[ -n "$custom_dns" ]]; do
 			echo "Enter DNS servers (one or more IPv4 addresses, separated by commas or spaces):"
-			read -p "DNS servers: " dns_input
+			if [[ -n "${VPN_MANAGER_OPENVPN_CUSTOM_DNS:-}" ]]; then
+				dns_input="${VPN_MANAGER_OPENVPN_CUSTOM_DNS}"
+			else
+				read -p "DNS servers: " dns_input
+			fi
 			# Convert comma delimited to space delimited
 			dns_input=$(echo "$dns_input" | tr ',' ' ')
 			# Validate and build custom DNS IP list
@@ -206,7 +233,11 @@ if [[ ! -e /etc/openvpn/server/server.conf ]]; then
 	fi
 	echo
 	echo "Enter a name for the first client:"
-	read -p "Name [client]: " unsanitized_client
+	if [[ -n "${VPN_MANAGER_OPENVPN_FIRST_CLIENT:-}" ]]; then
+		unsanitized_client="${VPN_MANAGER_OPENVPN_FIRST_CLIENT}"
+	else
+		read -p "Name [client]: " unsanitized_client
+	fi
 	# Allow a limited set of characters to avoid conflicts
 	client=$(sed 's/[^0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_-]/_/g' <<< "$unsanitized_client")
 	[[ -z "$client" ]] && client="client"
@@ -224,7 +255,9 @@ if [[ ! -e /etc/openvpn/server/server.conf ]]; then
 			firewall="iptables"
 		fi
 	fi
-	read -n1 -r -p "Press any key to continue..."
+	if [[ "${VPN_MANAGER_APPROVE_INSTALL:-}" != "y" ]]; then
+		read -n1 -r -p "Press any key to continue..."
+	fi
 	# If running inside a container, disable LimitNPROC to prevent conflicts
 	if systemd-detect-virt -cq; then
 		mkdir /etc/systemd/system/openvpn-server@server.service.d/ 2>/dev/null

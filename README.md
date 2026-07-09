@@ -14,6 +14,8 @@
 - systemd packaging;
 - vendored `Nyr/openvpn-install`;
 - OpenVPN helper для status, создания, отзыва профилей и чтения подключений;
+- token-based auth для серверной установки;
+- endpoint и UI-форма первичной установки OpenVPN;
 - Playwright e2e smoke test.
 
 Локальный запуск:
@@ -44,6 +46,9 @@ API:
 
 ```text
 GET  /api/health
+POST /api/auth/login
+POST /api/auth/logout
+POST /api/setup/openvpn
 GET  /api/server/status
 GET  /api/providers
 GET  /api/openvpn/clients

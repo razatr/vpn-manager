@@ -3,6 +3,8 @@ set -euo pipefail
 
 COMMAND="${1:-}"
 CLIENT="${2:-}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+INSTALL_SCRIPT="${VPN_MANAGER_OPENVPN_INSTALL_SCRIPT:-${SCRIPT_DIR}/../third_party/openvpn-install/openvpn-install.sh}"
 SERVER_DIR="${OPENVPN_SERVER_DIR:-/etc/openvpn/server}"
 EASY_RSA_DIR="${OPENVPN_EASY_RSA_DIR:-${SERVER_DIR}/easy-rsa}"
 PROFILE_DIR="${VPN_MANAGER_PROFILE_DIR:-/var/lib/vpn-manager/profiles/openvpn}"
@@ -73,6 +75,94 @@ group_name() {
   else
     printf "nobody"
   fi
+}
+
+install_openvpn() {
+  local public_host=""
+  local port="1194"
+  local protocol="udp"
+  local dns="3"
+  local first_client="admin"
+  local custom_dns=""
+
+  shift
+  while [[ "$#" -gt 0 ]]; do
+    case "$1" in
+      --public-host)
+        public_host="${2:-}"
+        shift 2
+        ;;
+      --port)
+        port="${2:-}"
+        shift 2
+        ;;
+      --protocol)
+        protocol="${2:-}"
+        shift 2
+        ;;
+      --dns)
+        dns="${2:-}"
+        shift 2
+        ;;
+      --custom-dns)
+        custom_dns="${2:-}"
+        shift 2
+        ;;
+      --first-client)
+        first_client="${2:-}"
+        shift 2
+        ;;
+      *)
+        echo "Unknown install option: $1" >&2
+        exit 1
+        ;;
+    esac
+  done
+
+  CLIENT="${first_client}"
+  validate_client
+  if [[ -n "${public_host}" && ! "${public_host}" =~ ^[a-zA-Z0-9._-]+$ ]]; then
+    echo "Invalid public host. Use a hostname or IPv4 address." >&2
+    exit 1
+  fi
+  if [[ ! "${port}" =~ ^[0-9]+$ || "${port}" -lt 1 || "${port}" -gt 65535 ]]; then
+    echo "Invalid OpenVPN port." >&2
+    exit 1
+  fi
+  if [[ ! "${protocol}" =~ ^(udp|tcp)$ ]]; then
+    echo "Invalid OpenVPN protocol. Use udp or tcp." >&2
+    exit 1
+  fi
+  if [[ ! "${dns}" =~ ^[1-8]$ ]]; then
+    echo "Invalid DNS selection. Use 1-8." >&2
+    exit 1
+  fi
+  if [[ ! -f "${INSTALL_SCRIPT}" ]]; then
+    echo "OpenVPN installer not found at ${INSTALL_SCRIPT}" >&2
+    exit 3
+  fi
+
+  VPN_MANAGER_AUTO_INSTALL=y \
+  VPN_MANAGER_APPROVE_INSTALL=y \
+  VPN_MANAGER_PUBLIC_HOST="${public_host}" \
+  VPN_MANAGER_OPENVPN_PORT="${port}" \
+  VPN_MANAGER_OPENVPN_PROTOCOL="${protocol}" \
+  VPN_MANAGER_OPENVPN_DNS="${dns}" \
+  VPN_MANAGER_OPENVPN_CUSTOM_DNS="${custom_dns}" \
+  VPN_MANAGER_OPENVPN_FIRST_CLIENT="${first_client}" \
+  bash "${INSTALL_SCRIPT}"
+
+  mkdir -p "${PROFILE_DIR}"
+  generated_profile="$(dirname "${INSTALL_SCRIPT}")/${first_client}.ovpn"
+  profile_path="${PROFILE_DIR}/${first_client}.ovpn"
+  if [[ -f "${generated_profile}" ]]; then
+    mv "${generated_profile}" "${profile_path}"
+    chmod 0600 "${profile_path}"
+  fi
+
+  printf '{"installed":true,"firstClient":%s,"profilePath":%s}\n' \
+    "$(json_string "${first_client}")" \
+    "$(json_string "${profile_path}")"
 }
 
 case "${COMMAND}" in
@@ -193,12 +283,10 @@ case "${COMMAND}" in
     printf ']\n'
     ;;
   install)
-    echo "OpenVPN installation is not automated yet." >&2
-    echo "Next step: add a non-interactive installer around third_party/openvpn-install/openvpn-install.sh." >&2
-    exit 2
+    install_openvpn "$@"
     ;;
   *)
-    echo "Usage: $0 {status|list-clients|create-client NAME|revoke-client NAME|list-connections|install}" >&2
+    echo "Usage: $0 {status|list-clients|create-client NAME|revoke-client NAME|list-connections|install [options]}" >&2
     exit 1
     ;;
 esac

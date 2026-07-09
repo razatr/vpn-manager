@@ -9,6 +9,7 @@ DATA_DIR="/var/lib/vpn-manager"
 LOG_DIR="/var/log/vpn-manager"
 SERVICE_FILE="/etc/systemd/system/vpn-manager.service"
 PORT="${VPN_MANAGER_PORT:-80}"
+ADMIN_TOKEN="${VPN_MANAGER_ADMIN_TOKEN:-$(openssl rand -hex 24)}"
 
 if [[ "${EUID}" -ne 0 ]]; then
   echo "This installer must be run as root."
@@ -53,6 +54,7 @@ const config = JSON.parse(fs.readFileSync(path, 'utf8'));
 config.port = Number('${PORT}');
 config.dataDir = '${DATA_DIR}';
 config.publicUrl = 'http://' + require('os').hostname() + ':' + config.port;
+config.auth = { enabled: true, adminToken: '${ADMIN_TOKEN}' };
 fs.writeFileSync(path, JSON.stringify(config, null, 2) + '\n');
 "
 
@@ -92,5 +94,6 @@ systemctl enable --now "${APP_NAME}.service"
 echo
 echo "VPN Manager installed."
 echo "URL: http://$(hostname):${PORT}"
+echo "Admin token: ${ADMIN_TOKEN}"
 echo "Config: ${CONFIG_DIR}/config.json"
 echo "Logs: journalctl -u ${APP_NAME} -f"

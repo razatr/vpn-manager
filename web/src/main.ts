@@ -57,11 +57,43 @@ const state: State = {
 };
 
 const refreshButton = mustElement<HTMLButtonElement>("refresh");
+const logoutButton = mustElement<HTMLButtonElement>("logout");
 const clientForm = mustElement<HTMLFormElement>("client-form");
 const clientNameInput = mustElement<HTMLInputElement>("client-name");
+const loginPanel = mustElement<HTMLElement>("login-panel");
+const loginForm = mustElement<HTMLFormElement>("login-form");
+const loginTokenInput = mustElement<HTMLInputElement>("admin-token");
+const loginError = mustElement<HTMLElement>("login-error");
+const appShell = document.querySelector<HTMLElement>(".shell");
+const setupPanel = mustElement<HTMLElement>("setup-panel");
+const setupForm = mustElement<HTMLFormElement>("setup-form");
 
 refreshButton.addEventListener("click", () => {
   void load();
+});
+
+logoutButton.addEventListener("click", async () => {
+  await fetch("/api/auth/logout", { method: "POST" });
+  showLogin();
+});
+
+loginForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  loginError.hidden = true;
+  const response = await fetch("/api/auth/login", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ token: loginTokenInput.value })
+  });
+
+  if (!response.ok) {
+    loginError.hidden = false;
+    return;
+  }
+
+  loginTokenInput.value = "";
+  showApp();
+  await load();
 });
 
 clientForm.addEventListener("submit", async (event) => {
@@ -84,6 +116,30 @@ clientForm.addEventListener("submit", async (event) => {
   }
 
   clientNameInput.value = "";
+  await load();
+});
+
+setupForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const form = new FormData(setupForm);
+  const response = await fetch("/api/setup/openvpn", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      publicHost: String(form.get("publicHost") || "").trim(),
+      port: Number(form.get("port") || 1194),
+      protocol: String(form.get("protocol") || "udp"),
+      dns: Number(form.get("dns") || 3),
+      firstClient: String(form.get("firstClient") || "admin").trim()
+    })
+  });
+
+  if (!response.ok) {
+    const data = await response.json() as { message?: string; error?: string };
+    window.alert(data.message || data.error || "Ошибка установки OpenVPN");
+    return;
+  }
+
   await load();
 });
 
@@ -128,6 +184,10 @@ async function load(): Promise<void> {
 
 async function fetchJson<T>(url: string): Promise<T> {
   const response = await fetch(url);
+  if (response.status === 401) {
+    showLogin();
+    throw new Error("Требуется вход");
+  }
   if (!response.ok) {
     throw new Error(`${url}: ${response.status}`);
   }
@@ -145,6 +205,7 @@ function render(): void {
   mustElement("openvpn-active").textContent = openvpn.active ? "запущен" : "не запущен";
   mustElement("openvpn-status-log").textContent = openvpn.statusLogExists ? openvpn.statusLogPath : "не найден";
   mustElement("openvpn-profile-dir").textContent = openvpn.profileDir;
+  setupPanel.hidden = openvpn.installed;
 
   mustElement("clients").innerHTML = state.clients.length
     ? state.clients.map(renderClient).join("")
@@ -218,6 +279,21 @@ function mustElement<T extends HTMLElement = HTMLElement>(id: string): T {
     throw new Error(`Missing element: #${id}`);
   }
   return element as T;
+}
+
+function showLogin(): void {
+  loginPanel.hidden = false;
+  if (appShell) {
+    appShell.hidden = true;
+  }
+  loginTokenInput.focus();
+}
+
+function showApp(): void {
+  loginPanel.hidden = true;
+  if (appShell) {
+    appShell.hidden = false;
+  }
 }
 
 load().catch((error: unknown) => {

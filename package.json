@@ -11,6 +11,7 @@
     "dev": "vite --host 127.0.0.1",
     "build": "vite build",
     "typecheck": "tsc --noEmit",
+    "test:api": "node --test tests/api/*.test.js",
     "test:e2e": "playwright test",
     "check": "npm run typecheck && node --check src/main.js && node --check src/config.js && node --check src/server.js && node --check src/store.js && node --check src/providers/openvpn.js"
   },
