@@ -1,2 +1,1 @@
 vpn-manager ALL=(root) NOPASSWD: /usr/local/lib/vpn-manager/openvpn-helper
-

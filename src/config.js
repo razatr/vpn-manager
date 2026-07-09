@@ -12,6 +12,8 @@ const defaultConfig = {
   },
   openvpn: {
     helperPath: "./scripts/openvpn-manager.sh",
+    helperUseSudo: false,
+    installScriptPath: "./third_party/openvpn-install/openvpn-install.sh",
     configPath: "/etc/openvpn/server/server.conf",
     statusLogPath: "/run/openvpn-server/status.log",
     profileDir: "/var/lib/vpn-manager/profiles/openvpn"
@@ -25,7 +27,12 @@ export function loadConfig(configPath) {
   config.port = Number(process.env.PORT || config.port);
   config.host = process.env.HOST || config.host;
   config.dataDir = path.resolve(process.env.DATA_DIR || config.dataDir);
-  config.openvpn.helperPath = path.resolve(config.openvpn.helperPath);
+  if (!path.isAbsolute(config.openvpn.helperPath)) {
+    config.openvpn.helperPath = path.resolve(config.openvpn.helperPath);
+  }
+  if (!path.isAbsolute(config.openvpn.installScriptPath)) {
+    config.openvpn.installScriptPath = path.resolve(config.openvpn.installScriptPath);
+  }
 
   return config;
 }

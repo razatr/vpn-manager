@@ -87,13 +87,16 @@ export class OpenVPNProvider {
   }
 
   async runJson(args) {
-    const { stdout } = await execFileAsync(this.config.helperPath, args, {
+    const command = this.config.helperUseSudo ? "sudo" : this.config.helperPath;
+    const commandArgs = this.config.helperUseSudo ? [this.config.helperPath, ...args] : args;
+    const { stdout } = await execFileAsync(command, commandArgs, {
       env: {
         ...process.env,
         OPENVPN_STATUS_LOG: this.config.statusLogPath,
-        VPN_MANAGER_PROFILE_DIR: this.config.profileDir
+        VPN_MANAGER_PROFILE_DIR: this.config.profileDir,
+        VPN_MANAGER_OPENVPN_INSTALL_SCRIPT: this.config.installScriptPath
       },
-      timeout: 120_000,
+      timeout: args[0] === "install" ? 900_000 : 120_000,
       maxBuffer: 1024 * 1024
     });
 

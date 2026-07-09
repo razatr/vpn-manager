@@ -12,12 +12,10 @@ Environment=VPN_MANAGER_CONFIG=/etc/vpn-manager/config.json
 ExecStart=/usr/bin/env node /opt/vpn-manager/src/main.js
 Restart=on-failure
 RestartSec=3
-NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=full
 ProtectHome=true
-ReadWritePaths=/var/lib/vpn-manager /var/log/vpn-manager
+ReadWritePaths=/var/lib/vpn-manager /var/log/vpn-manager /etc/openvpn /run/openvpn-server
 
 [Install]
 WantedBy=multi-user.target
-

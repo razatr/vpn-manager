@@ -79,7 +79,13 @@ GET  /api/events
 Пользовательская установка:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/<owner>/vpn-manager/main/install.sh | sudo bash
+curl -fsSL https://raw.githubusercontent.com/razatr/vpn-manager/main/install.sh | sudo bash
+```
+
+Для форка или приватного репозитория:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/razatr/vpn-manager/main/install.sh | sudo VPN_MANAGER_REPO=https://github.com/<owner>/vpn-manager.git bash
 ```
 
 Что делает `install.sh`:
