@@ -160,6 +160,14 @@ npm test
 sudo bash scripts/doctor.sh
 ```
 
+После установки OpenVPN этот же doctor проверяет самые частые причины ситуации `OpenVPN подключился, но интернета нет`: `ip_forward`, NAT/FORWARD rules, `openvpn-iptables.service`, default route, TUN и server egress. Для быстрого отбора VPS с почасовой оплатой:
+
+```bash
+sudo /opt/vpn-manager/scripts/doctor.sh
+```
+
+Если есть `[fail] NAT rule`, `[fail] net.ipv4.ip_forward` или `[fail] FORWARD rule`, этот сервер не стоит дальше тестировать как OpenVPN-хост, пока причина не исправлена.
+
 Подробный чеклист первого VPS-прогона лежит в [docs/SERVER_TEST.md](docs/SERVER_TEST.md).
 
 План расширения на VLESS/REALITY, белые списки РФ и WireGuard лежит в [docs/ROADMAP.md](docs/ROADMAP.md).
