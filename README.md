@@ -168,6 +168,27 @@ sudo /opt/vpn-manager/scripts/doctor.sh
 
 Если есть `[fail] NAT rule`, `[fail] net.ipv4.ip_forward` или `[fail] FORWARD rule`, этот сервер не стоит дальше тестировать как OpenVPN-хост, пока причина не исправлена.
 
+## HTTPS Для Подписок И UI
+
+Если VLESS/REALITY использует порт `443`, web UI нельзя одновременно повесить на обычный `https://domain/` без переноса VLESS на другой порт. Практичный вариант:
+
+- VLESS/REALITY остается на `443`;
+- `vpn-manager` слушает локально `127.0.0.1:8080`;
+- Nginx слушает `80` для ACME challenge и reverse proxy;
+- Nginx слушает `8443` с Let's Encrypt сертификатом для UI и subscription URL.
+
+При такой схеме `publicUrl` должен быть:
+
+```text
+https://<domain>:8443
+```
+
+Повторная установка не перетирает существующие `host`, `port` и `publicUrl` в `/etc/vpn-manager/config.json`, если они уже были настроены. Для явного задания при установке можно использовать:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/razatr/vpn-manager/main/install.sh | sudo env VPN_MANAGER_HOST=127.0.0.1 VPN_MANAGER_PORT=8080 VPN_MANAGER_PUBLIC_URL='https://vpn.example.com:8443' bash
+```
+
 Подробный чеклист первого VPS-прогона лежит в [docs/SERVER_TEST.md](docs/SERVER_TEST.md).
 
 План расширения на VLESS/REALITY, белые списки РФ и WireGuard лежит в [docs/ROADMAP.md](docs/ROADMAP.md).

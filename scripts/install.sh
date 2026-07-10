@@ -13,7 +13,9 @@ VLESS_HELPER_PATH="${HELPER_DIR}/vless-helper"
 WIREGUARD_HELPER_PATH="${HELPER_DIR}/wireguard-helper"
 SUDOERS_FILE="/etc/sudoers.d/vpn-manager"
 SERVICE_FILE="/etc/systemd/system/vpn-manager.service"
-PORT="${VPN_MANAGER_PORT:-80}"
+HOST="${VPN_MANAGER_HOST:-}"
+PORT="${VPN_MANAGER_PORT:-}"
+PUBLIC_URL="${VPN_MANAGER_PUBLIC_URL:-}"
 ADMIN_TOKEN="${VPN_MANAGER_ADMIN_TOKEN:-$(openssl rand -hex 24)}"
 ADMIN_USERNAME="${VPN_MANAGER_ADMIN_USERNAME:-}"
 ADMIN_PASSWORD="${VPN_MANAGER_ADMIN_PASSWORD:-}"
@@ -136,18 +138,31 @@ cp -R ./third_party "${HELPER_DIR}/"
 chmod 0755 "${HELPER_PATH}"
 chmod 0755 "${VLESS_HELPER_PATH}"
 chmod 0755 "${WIREGUARD_HELPER_PATH}"
-cp ./config.example.json "${CONFIG_DIR}/config.json"
+CONFIG_EXISTS="false"
+if [[ -f "${CONFIG_DIR}/config.json" ]]; then
+  CONFIG_EXISTS="true"
+else
+  cp ./config.example.json "${CONFIG_DIR}/config.json"
+fi
 
-VPN_MANAGER_ADMIN_USERNAME="${ADMIN_USERNAME}" VPN_MANAGER_ADMIN_PASSWORD="${ADMIN_PASSWORD}" node -e "
+VPN_MANAGER_ADMIN_USERNAME="${ADMIN_USERNAME}" \
+VPN_MANAGER_ADMIN_PASSWORD="${ADMIN_PASSWORD}" \
+VPN_MANAGER_HOST="${HOST}" \
+VPN_MANAGER_PORT="${PORT}" \
+VPN_MANAGER_PUBLIC_URL="${PUBLIC_URL}" \
+VPN_MANAGER_CONFIG_EXISTS="${CONFIG_EXISTS}" \
+node -e "
 const fs = require('fs');
 const crypto = require('crypto');
 const path = '${CONFIG_DIR}/config.json';
 const config = JSON.parse(fs.readFileSync(path, 'utf8'));
+const configExists = process.env.VPN_MANAGER_CONFIG_EXISTS === 'true';
 const salt = crypto.randomBytes(16).toString('hex');
 const passwordHash = crypto.scryptSync(process.env.VPN_MANAGER_ADMIN_PASSWORD, salt, 32).toString('hex');
-config.port = Number('${PORT}');
+config.host = process.env.VPN_MANAGER_HOST || (configExists ? config.host : '0.0.0.0');
+config.port = Number(process.env.VPN_MANAGER_PORT || (configExists ? config.port : 80));
 config.dataDir = '${DATA_DIR}';
-config.publicUrl = 'http://' + require('os').hostname() + ':' + config.port;
+config.publicUrl = process.env.VPN_MANAGER_PUBLIC_URL || (configExists ? config.publicUrl : 'http://' + require('os').hostname() + ':' + config.port);
 config.auth = {
   enabled: true,
   adminToken: '${ADMIN_TOKEN}',
