@@ -69,7 +69,12 @@ client_status_from_index_line() {
 }
 
 client_name_from_index_line() {
-  sed -E 's#^.*/CN=([^/]+).*$#\1#; t; s#^.*=##' <<< "$1"
+  local line="$1"
+  if [[ "${line}" =~ /CN=([^/[:space:]]+) ]]; then
+    printf "%s" "${BASH_REMATCH[1]}"
+  else
+    printf "%s" "${line##*=}"
+  fi
 }
 
 group_name() {
@@ -113,6 +118,32 @@ secure_profile() {
   if getent group "${PROFILE_GROUP}" >/dev/null 2>&1; then
     chgrp "${PROFILE_GROUP}" "${profile_path}" 2>/dev/null || true
   fi
+}
+
+recover_profile() {
+  local client_name="$1"
+  local profile_path="${PROFILE_DIR}/${client_name}.ovpn"
+  local nyr_profile="/root/${client_name}.ovpn"
+  local inline_profile="${EASY_RSA_DIR}/pki/inline/private/${client_name}.inline"
+
+  if [[ -f "${profile_path}" ]]; then
+    return 0
+  fi
+
+  mkdir -p "${PROFILE_DIR}"
+  if [[ -f "${nyr_profile}" ]]; then
+    cp "${nyr_profile}" "${profile_path}"
+    secure_profile "${profile_path}"
+    return 0
+  fi
+
+  if [[ -f "${CLIENT_COMMON}" && -f "${inline_profile}" ]]; then
+    grep -vh '^#' "${CLIENT_COMMON}" "${inline_profile}" > "${profile_path}"
+    secure_profile "${profile_path}"
+    return 0
+  fi
+
+  return 1
 }
 
 install_openvpn() {
@@ -252,12 +283,15 @@ case "${COMMAND}" in
         name="$(client_name_from_index_line "${line}")"
         [[ "${name}" == "server" ]] && continue
         status="$(client_status_from_index_line "${line}")"
+        profile_path="${PROFILE_DIR}/${name}.ovpn"
+        if [[ "${status}" == "valid" ]]; then
+          recover_profile "${name}" >/dev/null 2>&1 || true
+        fi
         if [[ "${first}" == "true" ]]; then
           first="false"
         else
           printf ','
         fi
-        profile_path="${PROFILE_DIR}/${name}.ovpn"
         profile_exists="false"
         [[ -f "${profile_path}" ]] && profile_exists="true"
         printf '{"name":%s,"status":%s,"profilePath":%s,"profileExists":%s}' \
@@ -273,6 +307,12 @@ case "${COMMAND}" in
     validate_client
     require_installed
     if client_exists; then
+      if recover_profile "${CLIENT}"; then
+        printf '{"name":%s,"profilePath":%s,"recovered":true}\n' \
+          "$(json_string "${CLIENT}")" \
+          "$(json_string "${PROFILE_DIR}/${CLIENT}.ovpn")"
+        exit 0
+      fi
       echo "Client already exists: ${CLIENT}" >&2
       exit 4
     fi
@@ -308,6 +348,7 @@ case "${COMMAND}" in
     cp "${EASY_RSA_DIR}/pki/crl.pem" "${SERVER_DIR}/crl.pem"
     chown "nobody:$(group_name)" "${SERVER_DIR}/crl.pem" 2>/dev/null || true
     rm -f "${PROFILE_DIR}/${CLIENT}.ovpn"
+    rm -f "/root/${CLIENT}.ovpn"
     printf '{"name":%s,"status":"revoked"}\n' "$(json_string "${CLIENT}")"
     ;;
   list-connections)
