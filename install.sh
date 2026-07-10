@@ -32,6 +32,7 @@ install_bootstrap_deps() {
 }
 
 install_bootstrap_deps
+echo "Bootstrap dependencies are ready."
 
 if ! command -v git >/dev/null 2>&1; then
   echo "git is required to install VPN Manager."
@@ -42,4 +43,5 @@ echo "Cloning VPN Manager from ${REPO_URL} (${REPO_REF})..."
 git clone --depth 1 --branch "${REPO_REF}" "${REPO_URL}" "${WORK_DIR}/vpn-manager"
 
 cd "${WORK_DIR}/vpn-manager"
+echo "Starting VPN Manager installer..."
 exec bash scripts/install.sh

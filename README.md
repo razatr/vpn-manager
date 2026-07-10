@@ -33,7 +33,7 @@ curl -fsSL https://raw.githubusercontent.com/razatr/vpn-manager/main/install.sh 
 Установка из форка или приватного репозитория:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/razatr/vpn-manager/main/install.sh | sudo VPN_MANAGER_REPO=https://github.com/<owner>/vpn-manager.git bash
+curl -fsSL https://raw.githubusercontent.com/razatr/vpn-manager/main/install.sh | sudo env VPN_MANAGER_REPO=https://github.com/<owner>/vpn-manager.git bash
 ```
 
 Инсталлятор:
