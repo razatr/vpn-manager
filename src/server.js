@@ -3,6 +3,7 @@ import http from "node:http";
 import path from "node:path";
 import crypto from "node:crypto";
 import { fileURLToPath } from "node:url";
+import QRCode from "qrcode";
 import { saveConfig } from "./config.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -13,6 +14,11 @@ export function createServer({ config, store, providers }) {
   return http.createServer(async (req, res) => {
     try {
       const url = new URL(req.url, `http://${req.headers.host || "localhost"}`);
+
+      if (url.pathname.startsWith("/sub/")) {
+        await handlePublicSubscription({ req, res, url, store });
+        return;
+      }
 
       if (url.pathname.startsWith("/api/")) {
         await handleApi({ req, res, url, config, store, providers });
@@ -366,8 +372,70 @@ async function handleApi({ req, res, url, config, store, providers }) {
     return;
   }
 
+  if (req.method === "GET" && /^\/api\/vless\/clients\/[^/]+\/link$/.test(url.pathname)) {
+    const name = validateClientName(decodeURIComponent(url.pathname.split("/")[4]));
+    const client = await store.findClient({ provider: "vless", name });
+    const uri = readClientProfileUri(client);
+    const subscriptionUrl = `${publicBaseUrl(req, config)}/sub/vless/${encodeURIComponent(client.id)}`;
+    sendJson(res, 200, {
+      uri,
+      subscriptionUrl,
+      happUrl: uri,
+      incyUrl: uri
+    });
+    return;
+  }
+
+  if (req.method === "GET" && /^\/api\/vless\/clients\/[^/]+\/qr.svg$/.test(url.pathname)) {
+    const name = validateClientName(decodeURIComponent(url.pathname.split("/")[4]));
+    const client = await store.findClient({ provider: "vless", name });
+    const uri = readClientProfileUri(client);
+    const svg = await QRCode.toString(uri, {
+      type: "svg",
+      errorCorrectionLevel: "M",
+      margin: 1,
+      width: 280
+    });
+    res.writeHead(200, { "content-type": "image/svg+xml; charset=utf-8" });
+    res.end(svg);
+    return;
+  }
+
   if (req.method === "GET" && url.pathname === "/api/events") {
     sendJson(res, 200, { events: await store.listEvents() });
+    return;
+  }
+
+  sendJson(res, 404, { error: "not_found" });
+}
+
+async function handlePublicSubscription({ req, res, url, store }) {
+  if (req.method === "GET" && /^\/sub\/vless\/[^/]+$/.test(url.pathname)) {
+    const id = decodeURIComponent(url.pathname.split("/")[3]);
+    const client = await store.findClientById(id);
+    if (!client || client.provider !== "vless") {
+      sendJson(res, 404, { error: "subscription_not_found" });
+      return;
+    }
+
+    const uri = readClientProfileUri(client);
+    const body = [
+      `#profile-title: ${client.name}`,
+      "#profile-update-interval: 24",
+      "#subscriptions-expand-now: 1",
+      "#tun-enable: 1",
+      uri,
+      ""
+    ].join("\n");
+    res.writeHead(200, {
+      "content-type": "text/plain; charset=utf-8",
+      "content-disposition": `attachment; filename="${client.name}-vless-sub.txt"`,
+      "profile-title": client.name,
+      "profile-update-interval": "24",
+      "subscriptions-expand-now": "1",
+      "tun-enable": "1"
+    });
+    res.end(body);
     return;
   }
 
@@ -413,6 +481,24 @@ function canRead(filePath) {
   } catch {
     return false;
   }
+}
+
+function readClientProfileUri(client) {
+  if (!client || !client.profilePath || !canRead(client.profilePath)) {
+    const error = new Error("Profile not found");
+    error.statusCode = 404;
+    throw error;
+  }
+  return fs.readFileSync(client.profilePath, "utf8").trim();
+}
+
+function publicBaseUrl(req, config) {
+  const host = req.headers["x-forwarded-host"] || req.headers.host;
+  if (host) {
+    const proto = req.headers["x-forwarded-proto"] || "http";
+    return `${proto}://${host}`;
+  }
+  return config.publicUrl.replace(/\/$/, "");
 }
 
 function isAuthorized(req, config) {

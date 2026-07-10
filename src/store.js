@@ -126,6 +126,11 @@ export class JsonStore {
     return db.clients.find((client) => client.provider === provider && client.name === name) || null;
   }
 
+  async findClientById(id) {
+    const db = await this.read();
+    return db.clients.find((client) => client.id === id) || null;
+  }
+
   async revokeClient({ provider, name }) {
     const db = await this.read();
     const client = db.clients.find(

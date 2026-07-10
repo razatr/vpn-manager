@@ -72,6 +72,13 @@ type WhitelistItem = {
   exists: boolean;
 };
 
+type VlessLinkInfo = {
+  uri: string;
+  subscriptionUrl: string;
+  happUrl: string;
+  incyUrl: string;
+};
+
 type State = {
   server: ServerStatus | null;
   openvpnClients: Client[];
@@ -120,6 +127,10 @@ const credentialsForm = mustElement<HTMLFormElement>("credentials-form");
 const globalBusy = mustElement<HTMLElement>("global-busy");
 const notice = mustElement<HTMLElement>("notice");
 const whitelistUpdateButton = mustElement<HTMLButtonElement>("whitelist-update");
+const qrPanel = mustElement<HTMLElement>("qr-panel");
+const qrContent = mustElement<HTMLElement>("qr-content");
+const qrTitle = mustElement<HTMLElement>("qr-title");
+const qrClose = mustElement<HTMLButtonElement>("qr-close");
 
 refreshButton.addEventListener("click", () => {
   void withBusy("Обновляю состояние...", "app:refresh", load);
@@ -128,6 +139,11 @@ refreshButton.addEventListener("click", () => {
 logoutButton.addEventListener("click", async () => {
   await fetch("/api/auth/logout", { method: "POST" });
   showLogin();
+});
+
+qrClose.addEventListener("click", () => {
+  qrPanel.hidden = true;
+  qrContent.innerHTML = "";
 });
 
 whitelistUpdateButton.addEventListener("click", async () => {
@@ -390,11 +406,30 @@ mustElement("vless-clients").addEventListener("click", async (event) => {
   }
 
   const client = target.dataset.client;
-  if (!client || target.dataset.action !== "download") {
+  if (!client) {
     return;
   }
 
-  await downloadProfile("vless", client);
+  switch (target.dataset.action) {
+    case "download":
+      await downloadProfile("vless", client);
+      break;
+    case "copy-vless":
+      await copyVlessLink(client, "uri");
+      break;
+    case "copy-vless-sub":
+      await copyVlessLink(client, "subscriptionUrl");
+      break;
+    case "open-happ":
+      await openVlessClient(client, "happUrl");
+      break;
+    case "open-incy":
+      await openVlessClient(client, "incyUrl");
+      break;
+    case "qr-vless":
+      await showVlessQr(client);
+      break;
+  }
 });
 
 mustElement("wireguard-clients").addEventListener("click", async (event) => {
@@ -537,9 +572,7 @@ function renderClientRow(client: Client): string {
   const canDownload = Boolean(client.profilePath) && client.status !== "revoked";
   const downloadAction = `${client.provider}:download:${client.name}`;
   const revokeAction = `${client.provider}:revoke:${client.name}`;
-  const profileLink = canDownload
-    ? `<button class="btn btn-sm btn-outline-primary" type="button" data-action="download" data-client="${escapeHtml(client.name)}">${buttonLabel(downloadAction, "Скачать")}</button>`
-    : `<span class="text-secondary">нет файла</span>`;
+  const profileLink = renderProfileActions(client, canDownload, downloadAction);
   const revokeButton = client.status === "revoked"
     ? `<span class="text-secondary">отозван</span>`
     : client.provider === "openvpn"
@@ -553,6 +586,26 @@ function renderClientRow(client: Client): string {
       <td>${profileLink}</td>
       <td class="text-end">${revokeButton}</td>
     </tr>
+  `;
+}
+
+function renderProfileActions(client: Client, canDownload: boolean, downloadAction: string): string {
+  if (!canDownload) {
+    return `<span class="text-secondary">нет файла</span>`;
+  }
+  if (client.provider !== "vless") {
+    return `<button class="btn btn-sm btn-outline-primary" type="button" data-action="download" data-client="${escapeHtml(client.name)}">${buttonLabel(downloadAction, "Скачать")}</button>`;
+  }
+
+  return `
+    <div class="action-cluster">
+      <button class="btn btn-sm btn-primary" type="button" data-action="copy-vless" data-client="${escapeHtml(client.name)}">${buttonLabel(`vless:copy:${client.name}`, "Копировать")}</button>
+      <button class="btn btn-sm btn-outline-primary" type="button" data-action="qr-vless" data-client="${escapeHtml(client.name)}">${buttonLabel(`vless:qr:${client.name}`, "QR")}</button>
+      <button class="btn btn-sm btn-outline-primary" type="button" data-action="open-happ" data-client="${escapeHtml(client.name)}">Happ</button>
+      <button class="btn btn-sm btn-outline-primary" type="button" data-action="open-incy" data-client="${escapeHtml(client.name)}">INCY</button>
+      <button class="btn btn-sm btn-outline-secondary" type="button" data-action="copy-vless-sub" data-client="${escapeHtml(client.name)}">${buttonLabel(`vless:sub:${client.name}`, "Subscription")}</button>
+      <button class="btn btn-sm btn-outline-secondary" type="button" data-action="download" data-client="${escapeHtml(client.name)}">${buttonLabel(downloadAction, "TXT")}</button>
+    </div>
   `;
 }
 
@@ -670,6 +723,56 @@ async function downloadProfile(provider: "openvpn" | "vless" | "wireguard", name
     link.remove();
     URL.revokeObjectURL(url);
     showNotice(`Файл ${name}.${extension} готов`);
+  });
+}
+
+async function copyVlessLink(name: string, field: "uri" | "subscriptionUrl"): Promise<void> {
+  const label = field === "uri" ? "VLESS ссылку" : "subscription URL";
+  await withBusy(`Копирую ${label} ${name}...`, field === "uri" ? `vless:copy:${name}` : `vless:sub:${name}`, async () => {
+    const info = await fetchJson<VlessLinkInfo>(`/api/vless/clients/${encodeURIComponent(name)}/link`);
+    await copyText(info[field]);
+    showNotice(field === "uri" ? "VLESS ссылка скопирована" : "Subscription URL скопирован");
+  });
+}
+
+async function openVlessClient(name: string, field: "happUrl" | "incyUrl"): Promise<void> {
+  const info = await fetchJson<VlessLinkInfo>(`/api/vless/clients/${encodeURIComponent(name)}/link`);
+  await copyText(info.uri).catch(() => undefined);
+  window.location.href = info[field];
+  showNotice("Ссылка скопирована. Если приложение не открылось, импортируй из буфера обмена или отсканируй QR.");
+}
+
+async function copyText(value: string): Promise<void> {
+  if (navigator.clipboard?.writeText) {
+    try {
+      await navigator.clipboard.writeText(value);
+      return;
+    } catch {
+      // Fall through to textarea copy for non-HTTPS admin pages.
+    }
+  }
+
+  const textarea = document.createElement("textarea");
+  textarea.value = value;
+  textarea.setAttribute("readonly", "true");
+  textarea.style.position = "fixed";
+  textarea.style.opacity = "0";
+  document.body.append(textarea);
+  textarea.select();
+  document.execCommand("copy");
+  textarea.remove();
+}
+
+async function showVlessQr(name: string): Promise<void> {
+  await withBusy(`Готовлю QR для ${name}...`, `vless:qr:${name}`, async () => {
+    const response = await fetch(`/api/vless/clients/${encodeURIComponent(name)}/qr.svg`);
+    if (!response.ok) {
+      await showResponseError(response, "Не удалось создать QR");
+      return;
+    }
+    qrTitle.textContent = `QR: ${name}`;
+    qrContent.innerHTML = await response.text();
+    qrPanel.hidden = false;
   });
 }
 

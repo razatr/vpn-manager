@@ -1,0 +1,88 @@
+(function(){let e=document.createElement(`link`).relList;if(e&&e.supports&&e.supports(`modulepreload`))return;for(let e of document.querySelectorAll(`link[rel="modulepreload"]`))n(e);new MutationObserver(e=>{for(let t of e)if(t.type===`childList`)for(let e of t.addedNodes)e.tagName===`LINK`&&e.rel===`modulepreload`&&n(e)}).observe(document,{childList:!0,subtree:!0});function t(e){let t={};return e.integrity&&(t.integrity=e.integrity),e.referrerPolicy&&(t.referrerPolicy=e.referrerPolicy),e.crossOrigin===`use-credentials`?t.credentials=`include`:e.crossOrigin===`anonymous`?t.credentials=`omit`:t.credentials=`same-origin`,t}function n(e){if(e.ep)return;e.ep=!0;let n=t(e);fetch(e.href,n)}})();var e={server:null,openvpnClients:[],vlessClients:[],wireguardClients:[],events:[],connections:[],whitelists:[],busy:!1,busyAction:null},t=Q(`refresh`),n=Q(`logout`),r=Q(`client-form`),i=Q(`client-name`),a=Q(`login-panel`),o=Q(`login-form`),s=Q(`login-username`),c=Q(`login-password`),l=Q(`login-error`),u=document.querySelector(`.shell`),ee=Q(`setup-panel`),d=Q(`setup-form`),f=Q(`vless-setup-panel`),p=Q(`vless-setup-form`),m=Q(`vless-client-form`),h=Q(`vless-client-name`),g=Q(`wireguard-setup-panel`),_=Q(`wireguard-setup-form`),v=Q(`wireguard-client-form`),y=Q(`wireguard-client-name`),b=Q(`credentials-form`),x=Q(`global-busy`),S=Q(`notice`),te=Q(`whitelist-update`),C=Q(`qr-panel`),w=Q(`qr-content`),T=Q(`qr-title`),ne=Q(`qr-close`);t.addEventListener(`click`,()=>{W(`Обновляю состояние...`,`app:refresh`,E)}),n.addEventListener(`click`,async()=>{await fetch(`/api/auth/logout`,{method:`POST`}),$()}),ne.addEventListener(`click`,()=>{C.hidden=!0,w.innerHTML=``}),te.addEventListener(`click`,async()=>{await W(`Обновляю белые списки из подписок...`,`whitelists:update`,async()=>{let e=await fetch(`/api/whitelists/update`,{method:`POST`});if(!e.ok){await J(e,`Не удалось обновить белые списки`);return}q(`Белые списки обновлены`),await E()})}),o.addEventListener(`submit`,async e=>{e.preventDefault(),l.hidden=!0,await W(`Вхожу...`,`auth:login`,async()=>{if(!(await fetch(`/api/auth/login`,{method:`POST`,headers:{"content-type":`application/json`},body:JSON.stringify({username:s.value.trim(),password:c.value})})).ok){l.hidden=!1;return}c.value=``,re(),await E()})}),r.addEventListener(`submit`,async e=>{e.preventDefault();let t=i.value.trim();t&&await W(`Создаю OpenVPN профиль ${t}...`,`openvpn:create:${t}`,async()=>{let e=await fetch(`/api/openvpn/clients`,{method:`POST`,headers:{"content-type":`application/json`},body:JSON.stringify({name:t})});if(!e.ok){await J(e,`Ошибка создания клиента`);return}i.value=``,q(`Профиль ${t} создан`),await E()})}),m.addEventListener(`submit`,async e=>{e.preventDefault();let t=h.value.trim();t&&await W(`Создаю VLESS профиль ${t}...`,`vless:create:${t}`,async()=>{let e=await fetch(`/api/vless/clients`,{method:`POST`,headers:{"content-type":`application/json`},body:JSON.stringify({name:t})});if(!e.ok){await J(e,`Ошибка создания VLESS клиента`);return}h.value=``,q(`VLESS профиль ${t} создан`),await E()})}),v.addEventListener(`submit`,async e=>{e.preventDefault();let t=y.value.trim();t&&await W(`Создаю WireGuard профиль ${t}...`,`wireguard:create:${t}`,async()=>{let e=await fetch(`/api/wireguard/clients`,{method:`POST`,headers:{"content-type":`application/json`},body:JSON.stringify({name:t})});if(!e.ok){await J(e,`Ошибка создания WireGuard клиента`);return}y.value=``,q(`WireGuard профиль ${t} создан`),await E()})}),d.addEventListener(`submit`,async e=>{e.preventDefault();let t=new FormData(d),n=String(t.get(`firstClient`)||`admin`).trim();await W(`Устанавливаю OpenVPN. Это может занять несколько минут...`,`openvpn:setup`,async()=>{let e=await fetch(`/api/setup/openvpn`,{method:`POST`,headers:{"content-type":`application/json`},body:JSON.stringify({publicHost:String(t.get(`publicHost`)||``).trim(),port:Number(t.get(`port`)||1194),protocol:String(t.get(`protocol`)||`udp`),dns:Number(t.get(`dns`)||3),firstClient:n})});if(!e.ok){await J(e,`Ошибка установки OpenVPN`);return}q(`OpenVPN установлен, первый профиль: ${n}`),await E()})}),p.addEventListener(`submit`,async e=>{e.preventDefault();let t=new FormData(p),n=String(t.get(`firstClient`)||`admin`).trim();await W(`Устанавливаю VLESS/REALITY и готовлю первый профиль...`,`vless:setup`,async()=>{let e=await fetch(`/api/setup/vless`,{method:`POST`,headers:{"content-type":`application/json`},body:JSON.stringify({publicHost:String(t.get(`publicHost`)||``).trim(),port:Number(t.get(`port`)||443),sni:String(t.get(`sni`)||`www.microsoft.com`).trim(),dest:String(t.get(`dest`)||`www.microsoft.com:443`).trim(),firstClient:n})});if(!e.ok){await J(e,`Ошибка установки VLESS`);return}q(`VLESS установлен, первый профиль: ${n}`),await E()})}),_.addEventListener(`submit`,async e=>{e.preventDefault();let t=new FormData(_),n=String(t.get(`firstClient`)||`admin`).trim();await W(`Устанавливаю WireGuard и готовлю первый профиль...`,`wireguard:setup`,async()=>{let e=await fetch(`/api/setup/wireguard`,{method:`POST`,headers:{"content-type":`application/json`},body:JSON.stringify({publicHost:String(t.get(`publicHost`)||``).trim(),port:Number(t.get(`port`)||51820),dns:String(t.get(`dns`)||`1.1.1.1`).trim(),firstClient:n})});if(!e.ok){await J(e,`Ошибка установки WireGuard`);return}q(`WireGuard установлен, первый профиль: ${n}`),await E()})}),b.addEventListener(`submit`,async e=>{e.preventDefault();let t=new FormData(b),n=String(t.get(`username`)||``).trim(),r=String(t.get(`password`)||``);await W(`Сохраняю учётные данные...`,`auth:save`,async()=>{let e=await fetch(`/api/auth/credentials`,{method:`POST`,headers:{"content-type":`application/json`},body:JSON.stringify({username:n,password:r})});if(!e.ok){await J(e,`Не удалось сохранить логин и пароль`);return}b.reset(),Q(`settings-username`).value=n,q(`Логин и пароль сохранены`)})}),Q(`openvpn-clients`).addEventListener(`click`,async e=>{let t=e.target;if(!(t instanceof HTMLButtonElement))return;let n=t.dataset.client;if(n){if(t.dataset.action===`download`){await R(`openvpn`,n);return}t.dataset.action===`revoke`&&await W(`Отзываю OpenVPN профиль ${n}...`,`openvpn:revoke:${n}`,async()=>{let e=await fetch(`/api/openvpn/clients/${encodeURIComponent(n)}/revoke`,{method:`POST`});if(!e.ok){await J(e,`Ошибка отзыва клиента`);return}q(`Профиль ${n} отозван`),await E()})}}),Q(`vless-clients`).addEventListener(`click`,async e=>{let t=e.target;if(!(t instanceof HTMLButtonElement))return;let n=t.dataset.client;if(n)switch(t.dataset.action){case`download`:await R(`vless`,n);break;case`copy-vless`:await z(n,`uri`);break;case`copy-vless-sub`:await z(n,`subscriptionUrl`);break;case`open-happ`:await B(n,`happUrl`);break;case`open-incy`:await B(n,`incyUrl`);break;case`qr-vless`:await H(n);break}}),Q(`wireguard-clients`).addEventListener(`click`,async e=>{let t=e.target;if(!(t instanceof HTMLButtonElement))return;let n=t.dataset.client;!n||t.dataset.action!==`download`||await R(`wireguard`,n)}),Q(`whitelists`).addEventListener(`click`,async e=>{let t=e.target;if(!(t instanceof HTMLButtonElement))return;let n=t.dataset.whitelist;!n||t.dataset.action!==`download-whitelist`||await U(n)});async function E(){let[t,n,r,i,a,o,s]=await Promise.all([D(`/api/server/status`),D(`/api/openvpn/clients`),D(`/api/vless/clients`),D(`/api/wireguard/clients`),D(`/api/whitelists/status`),D(`/api/events`),D(`/api/openvpn/connections`)]);e.server=t,e.openvpnClients=n.clients,e.vlessClients=r.clients,e.wireguardClients=i.clients,e.events=o.events,e.connections=s.connections,e.whitelists=a.lists,O()}async function D(e){let t=await fetch(e);if(t.status===401)throw $(),Error(`Требуется вход`);if(!t.ok)throw Error(`${e}: ${t.status}`);return t.json()}function O(){if(!e.server)return;let t=e.server.providers.openvpn,n=e.server.providers.vless,r=e.server.providers.wireguard;Q(`server-state`).textContent=e.server.ok?`API работает`:`API недоступен`,Q(`settings-username`).value=e.server.auth.username,L(`openvpn-installed`,t.installed?`Установлен`:`Не установлен`,t.installed?`success`:`secondary`),L(`openvpn-active`,t.active?`Запущен`:`Остановлен`,t.active?`success`:`danger`),Q(`openvpn-status-log`).textContent=t.statusLogExists?t.statusLogPath:`не найден`,Q(`openvpn-profile-dir`).textContent=t.profileDir,n&&(L(`vless-installed`,n.installed?`Установлен`:`Не установлен`,n.installed?`success`:`secondary`),L(`vless-active`,n.active?`Запущен`:`Остановлен`,n.active?`success`:`danger`),Q(`vless-config`).textContent=n.configPath,Q(`vless-profile-dir`).textContent=n.profileDir),ee.hidden=t.installed,f.hidden=!!n?.installed,m.hidden=!n?.installed,r&&(L(`wireguard-installed`,r.installed?`Установлен`:`Не установлен`,r.installed?`success`:`secondary`),L(`wireguard-active`,r.active?`Запущен`:`Остановлен`,r.active?`success`:`danger`),Q(`wireguard-config`).textContent=r.configPath,Q(`wireguard-profile-dir`).textContent=r.profileDir),g.hidden=!!r?.installed,v.hidden=!r?.installed,Q(`openvpn-clients`).innerHTML=e.openvpnClients.length?k(e.openvpnClients):`<div class="empty-state">Клиентов пока нет</div>`,Q(`vless-clients`).innerHTML=e.vlessClients.length?k(e.vlessClients):`<div class="empty-state">VLESS клиентов пока нет</div>`,Q(`wireguard-clients`).innerHTML=e.wireguardClients.length?k(e.wireguardClients):`<div class="empty-state">WireGuard клиентов пока нет</div>`,Q(`events`).innerHTML=e.events.length?e.events.map(F).join(``):`<div class="empty-state">Событий пока нет</div>`,Q(`connections`).innerHTML=e.connections.length?M(e.connections):`<div class="empty-state">Активных подключений пока нет</div>`,Q(`whitelists`).innerHTML=e.whitelists.length?N(e.whitelists):`<div class="empty-state">Белые списки пока не загружены</div>`}function k(e){return`
+    <div class="table-responsive">
+      <table class="table align-middle">
+        <thead>
+          <tr>
+            <th>Клиент</th>
+            <th>Статус</th>
+            <th>Профиль</th>
+            <th class="text-end">Действия</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${e.map(A).join(``)}
+        </tbody>
+      </table>
+    </div>
+  `}function A(e){let t=!!e.profilePath&&e.status!==`revoked`,n=`${e.provider}:download:${e.name}`,r=`${e.provider}:revoke:${e.name}`,i=j(e,t,n),a=e.status===`revoked`?`<span class="text-secondary">отозван</span>`:e.provider===`openvpn`?`<button class="btn btn-sm btn-outline-danger" type="button" data-action="revoke" data-client="${Z(e.name)}">${K(r,`Отозвать`)}</button>`:`<span class="text-secondary">-</span>`;return`
+    <tr>
+      <td><strong>${Z(e.name)}</strong></td>
+      <td>${I(e.status)}</td>
+      <td>${i}</td>
+      <td class="text-end">${a}</td>
+    </tr>
+  `}function j(e,t,n){return t?e.provider===`vless`?`
+    <div class="action-cluster">
+      <button class="btn btn-sm btn-primary" type="button" data-action="copy-vless" data-client="${Z(e.name)}">${K(`vless:copy:${e.name}`,`Копировать`)}</button>
+      <button class="btn btn-sm btn-outline-primary" type="button" data-action="qr-vless" data-client="${Z(e.name)}">${K(`vless:qr:${e.name}`,`QR`)}</button>
+      <button class="btn btn-sm btn-outline-primary" type="button" data-action="open-happ" data-client="${Z(e.name)}">Happ</button>
+      <button class="btn btn-sm btn-outline-primary" type="button" data-action="open-incy" data-client="${Z(e.name)}">INCY</button>
+      <button class="btn btn-sm btn-outline-secondary" type="button" data-action="copy-vless-sub" data-client="${Z(e.name)}">${K(`vless:sub:${e.name}`,`Subscription`)}</button>
+      <button class="btn btn-sm btn-outline-secondary" type="button" data-action="download" data-client="${Z(e.name)}">${K(n,`TXT`)}</button>
+    </div>
+  `:`<button class="btn btn-sm btn-outline-primary" type="button" data-action="download" data-client="${Z(e.name)}">${K(n,`Скачать`)}</button>`:`<span class="text-secondary">нет файла</span>`}function M(e){return`
+    <div class="table-responsive">
+      <table class="table align-middle">
+        <thead>
+          <tr>
+            <th>Клиент</th>
+            <th>VPN IP</th>
+            <th>Реальный адрес</th>
+            <th>Получено</th>
+            <th>Отправлено</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${e.map(e=>`
+            <tr>
+              <td><strong>${Z(e.commonName)}</strong></td>
+              <td>${Z(e.virtualAddress||`-`)}</td>
+              <td>${Z(e.realAddress||`-`)}</td>
+              <td>${X(e.bytesReceived)}</td>
+              <td>${X(e.bytesSent)}</td>
+            </tr>
+          `).join(``)}
+        </tbody>
+      </table>
+    </div>
+  `}function N(e){return`
+    <div class="table-responsive">
+      <table class="table align-middle">
+        <thead>
+          <tr>
+            <th>Список</th>
+            <th>Обновлён</th>
+            <th>Размер</th>
+            <th>Источник</th>
+            <th class="text-end">Файл</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${e.map(P).join(``)}
+        </tbody>
+      </table>
+    </div>
+  `}function P(e){let t=`whitelist:download:${e.id}`,n=e.exists?`<button class="btn btn-sm btn-outline-primary" type="button" data-action="download-whitelist" data-whitelist="${Z(e.id)}">${K(t,`Скачать`)}</button>`:`<span class="text-secondary">нет файла</span>`;return`
+    <tr>
+      <td><strong>${Z(e.name)}</strong></td>
+      <td>${e.updatedAt?Y(e.updatedAt):`-`}</td>
+      <td>${X(e.size)}</td>
+      <td><span class="source-url">${Z(e.sourceUrl)}</span></td>
+      <td class="text-end">${n}</td>
+    </tr>
+  `}function F(e){return`
+    <article class="event-item">
+      <span>${Z(e.message)}</span>
+      <time>${Y(e.createdAt)}</time>
+    </article>
+  `}function I(e){let t={active:{label:`Активен`,tone:`success`},registered:{label:`Зарегистрирован`,tone:`info`},missing_profile:{label:`Нет файла профиля`,tone:`warning`},missing:{label:`Нет в OpenVPN`,tone:`warning`},revoked:{label:`Отозван`,tone:`secondary`},expired:{label:`Истёк`,tone:`danger`}}[e]||{label:e,tone:`secondary`};return`<span class="badge text-bg-${t.tone}">${Z(t.label)}</span>`}function L(e,t,n){let r=Q(e);r.className=`badge text-bg-${n}`,r.textContent=t}async function R(e,t){await W(`Готовлю файл профиля ${t}...`,`${e}:download:${t}`,async()=>{let n=await fetch(`/api/${e}/clients/${encodeURIComponent(t)}/profile`);if(!n.ok){await J(n,`Не удалось скачать профиль`),await E();return}let r=await n.blob(),i=e===`openvpn`?`ovpn`:e===`wireguard`?`conf`:`txt`,a=URL.createObjectURL(r),o=document.createElement(`a`);o.href=a,o.download=e===`openvpn`?`${t}.ovpn`:e===`wireguard`?`${t}-wireguard.conf`:`${t}-vless.txt`,document.body.append(o),o.click(),o.remove(),URL.revokeObjectURL(a),q(`Файл ${t}.${i} готов`)})}async function z(e,t){await W(`Копирую ${t===`uri`?`VLESS ссылку`:`subscription URL`} ${e}...`,t===`uri`?`vless:copy:${e}`:`vless:sub:${e}`,async()=>{await V((await D(`/api/vless/clients/${encodeURIComponent(e)}/link`))[t]),q(t===`uri`?`VLESS ссылка скопирована`:`Subscription URL скопирован`)})}async function B(e,t){let n=await D(`/api/vless/clients/${encodeURIComponent(e)}/link`);await V(n.uri).catch(()=>void 0),window.location.href=n[t],q(`Ссылка скопирована. Если приложение не открылось, импортируй из буфера обмена или отсканируй QR.`)}async function V(e){if(navigator.clipboard?.writeText)try{await navigator.clipboard.writeText(e);return}catch{}let t=document.createElement(`textarea`);t.value=e,t.setAttribute(`readonly`,`true`),t.style.position=`fixed`,t.style.opacity=`0`,document.body.append(t),t.select(),document.execCommand(`copy`),t.remove()}async function H(e){await W(`Готовлю QR для ${e}...`,`vless:qr:${e}`,async()=>{let t=await fetch(`/api/vless/clients/${encodeURIComponent(e)}/qr.svg`);if(!t.ok){await J(t,`Не удалось создать QR`);return}T.textContent=`QR: ${e}`,w.innerHTML=await t.text(),C.hidden=!1})}async function U(t){let n=e.whitelists.find(e=>e.id===t);await W(`Готовлю файл ${n?.fileName||t}...`,`whitelist:download:${t}`,async()=>{let e=await fetch(`/api/whitelists/${encodeURIComponent(t)}/download`);if(!e.ok){await J(e,`Не удалось скачать белый список`),await E();return}let r=await e.blob(),i=URL.createObjectURL(r),a=document.createElement(`a`);a.href=i,a.download=n?.fileName||`${t}.txt`,document.body.append(a),a.click(),a.remove(),URL.revokeObjectURL(i),q(`Файл ${n?.fileName||t} готов`)})}async function W(t,n,r){e.busy=!0,e.busyAction=n,G(!0,t),O();try{await r()}finally{e.busy=!1,e.busyAction=null,G(!1,``),O()}}function G(e,t){x.hidden=!e,Q(`busy-message`).textContent=t;for(let t of document.querySelectorAll(`button`))t.disabled=e}function K(t,n){return e.busyAction===t?`<span class="spinner-border spinner-border-sm" aria-hidden="true"></span><span>${Z(n)}</span>`:Z(n)}function q(e){S.hidden=!1,S.textContent=e,window.setTimeout(()=>{S.hidden=!0},5e3)}async function J(e,t){let n=await e.json().catch(()=>({}));q(n.message||n.error||t)}function Y(e){return new Intl.DateTimeFormat(`ru-RU`,{dateStyle:`short`,timeStyle:`medium`}).format(new Date(e))}function X(e){if(!Number.isFinite(e))return`0 B`;let t=[`B`,`KB`,`MB`,`GB`],n=e,r=0;for(;n>=1024&&r<t.length-1;)n/=1024,r+=1;return`${n.toFixed(r===0?0:1)} ${t[r]}`}function Z(e){return e.replace(/[&<>"']/g,e=>({"&":`&amp;`,"<":`&lt;`,">":`&gt;`,'"':`&quot;`,"'":`&#039;`})[e]||e)}function Q(e){let t=document.getElementById(e);if(!t)throw Error(`Missing element: #${e}`);return t}function $(){a.hidden=!1,u&&(u.hidden=!0),c.focus()}function re(){a.hidden=!0,u&&(u.hidden=!1)}W(`Загружаю состояние...`,`app:load`,E).catch(e=>{Q(`server-state`).textContent=e instanceof Error?e.message:`Ошибка загрузки`});

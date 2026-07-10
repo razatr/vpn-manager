@@ -167,6 +167,44 @@ dd {
   gap: 6px;
 }
 
+.action-cluster {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-start;
+  gap: 6px;
+  min-width: min(520px, 100%);
+}
+
+.qr-panel {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: grid;
+  place-items: center;
+  background: rgba(24, 33, 47, 0.36);
+  padding: 18px;
+}
+
+.qr-dialog {
+  width: min(360px, 100%);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel-bg);
+  padding: 16px;
+  box-shadow: 0 18px 48px rgba(24, 33, 47, 0.22);
+}
+
+.qr-content {
+  display: grid;
+  place-items: center;
+  margin-top: 14px;
+}
+
+.qr-content svg {
+  width: min(280px, 100%);
+  height: auto;
+}
+
 .event-item,
 .empty-state {
   border: 1px solid var(--line);
@@ -221,5 +259,9 @@ dd {
 
   .source-url {
     max-width: 220px;
+  }
+
+  .action-cluster {
+    min-width: 0;
   }
 }
