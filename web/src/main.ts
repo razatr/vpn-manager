@@ -84,6 +84,7 @@ type State = {
   server: ServerStatus | null;
   openvpnClients: Client[];
   vlessClients: Client[];
+  vlessLinks: Record<string, VlessLinkInfo>;
   wireguardClients: Client[];
   events: EventItem[];
   connections: Connection[];
@@ -96,6 +97,7 @@ const state: State = {
   server: null,
   openvpnClients: [],
   vlessClients: [],
+  vlessLinks: {},
   wireguardClients: [],
   events: [],
   connections: [],
@@ -442,16 +444,22 @@ mustElement("vless-clients").addEventListener("click", async (event) => {
     case "copy-vless-sub":
       await copyVlessLink(client, "subscriptionUrl");
       break;
-    case "open-happ":
-      await openVlessClient(client, "happUrl");
-      break;
-    case "open-incy":
-      await openVlessClient(client, "incyUrl");
-      break;
     case "qr-vless":
       await showVlessQr(client);
       break;
   }
+});
+
+mustElement("vless-clients").addEventListener("click", (event) => {
+  if (!(event.target instanceof Element)) {
+    return;
+  }
+  const link = event.target.closest<HTMLAnchorElement>("a[data-direct-import]");
+  if (!link) {
+    return;
+  }
+  void copyText(link.href).catch(() => undefined);
+  showNotice("Открываю приложение. Если оно не открылось, VLESS ссылка уже скопирована в буфер.");
 });
 
 mustElement("wireguard-clients").addEventListener("click", async (event) => {
@@ -494,11 +502,26 @@ async function load(): Promise<void> {
   state.server = server;
   state.openvpnClients = openvpnClients.clients;
   state.vlessClients = vlessClients.clients;
+  state.vlessLinks = await loadVlessLinks(vlessClients.clients);
   state.wireguardClients = wireguardClients.clients;
   state.events = events.events;
   state.connections = connections.connections;
   state.whitelists = whitelists.lists;
   render();
+}
+
+async function loadVlessLinks(clients: Client[]): Promise<Record<string, VlessLinkInfo>> {
+  const entries = await Promise.all(clients
+    .filter((client) => client.status !== "revoked" && Boolean(client.profilePath))
+    .map(async (client) => {
+      try {
+        const info = await fetchJson<VlessLinkInfo>(`/api/vless/clients/${encodeURIComponent(client.name)}/link`);
+        return [client.name, info] as const;
+      } catch {
+        return null;
+      }
+    }));
+  return Object.fromEntries(entries.filter((entry): entry is readonly [string, VlessLinkInfo] => Boolean(entry)));
 }
 
 async function fetchJson<T>(url: string): Promise<T> {
@@ -627,12 +650,22 @@ function renderProfileActions(client: Client, canDownload: boolean, downloadActi
     return `<button class="btn btn-sm btn-outline-primary" type="button" data-action="download" data-client="${escapeHtml(client.name)}">${buttonLabel(downloadAction, "Скачать")}</button>`;
   }
 
+  const linkInfo = state.vlessLinks[client.name];
+  const directImportLinks = linkInfo
+    ? `
+      <a class="btn btn-sm btn-outline-primary" href="${escapeHtml(linkInfo.happUrl)}" data-direct-import="happ" data-client="${escapeHtml(client.name)}">Happ</a>
+      <a class="btn btn-sm btn-outline-primary" href="${escapeHtml(linkInfo.incyUrl)}" data-direct-import="incy" data-client="${escapeHtml(client.name)}">INCY</a>
+    `
+    : `
+      <button class="btn btn-sm btn-outline-primary" type="button" disabled>Happ</button>
+      <button class="btn btn-sm btn-outline-primary" type="button" disabled>INCY</button>
+    `;
+
   return `
     <div class="action-cluster">
       <button class="btn btn-sm btn-primary" type="button" data-action="copy-vless" data-client="${escapeHtml(client.name)}">${buttonLabel(`vless:copy:${client.name}`, "Копировать")}</button>
       <button class="btn btn-sm btn-outline-primary" type="button" data-action="qr-vless" data-client="${escapeHtml(client.name)}">${buttonLabel(`vless:qr:${client.name}`, "QR")}</button>
-      <button class="btn btn-sm btn-outline-primary" type="button" data-action="open-happ" data-client="${escapeHtml(client.name)}">Happ</button>
-      <button class="btn btn-sm btn-outline-primary" type="button" data-action="open-incy" data-client="${escapeHtml(client.name)}">INCY</button>
+      ${directImportLinks}
       <button class="btn btn-sm btn-outline-secondary" type="button" data-action="copy-vless-sub" data-client="${escapeHtml(client.name)}">${buttonLabel(`vless:sub:${client.name}`, "Sub URL")}</button>
       <button class="btn btn-sm btn-outline-secondary" type="button" data-action="download" data-client="${escapeHtml(client.name)}">${buttonLabel(downloadAction, "TXT")}</button>
     </div>
@@ -767,13 +800,6 @@ async function copyVlessLink(name: string, field: "uri" | "subscriptionUrl"): Pr
     }
     showNotice(field === "uri" ? "VLESS ссылка скопирована" : "Subscription URL скопирован");
   });
-}
-
-async function openVlessClient(name: string, field: "happUrl" | "incyUrl"): Promise<void> {
-  const info = await fetchJson<VlessLinkInfo>(`/api/vless/clients/${encodeURIComponent(name)}/link`);
-  await copyText(info.uri).catch(() => undefined);
-  window.location.href = info[field];
-  showNotice("Прямая VLESS ссылка скопирована. Если приложение не открылось, импортируй из буфера обмена или отсканируй QR.");
 }
 
 async function copyText(value: string): Promise<void> {
