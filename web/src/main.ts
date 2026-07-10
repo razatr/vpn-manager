@@ -387,8 +387,8 @@ credentialsForm.addEventListener("submit", async (event) => {
 });
 
 mustElement("openvpn-clients").addEventListener("click", async (event) => {
-  const target = event.target;
-  if (!(target instanceof HTMLButtonElement)) {
+  const target = actionButton(event);
+  if (!target) {
     return;
   }
 
@@ -422,8 +422,8 @@ mustElement("openvpn-clients").addEventListener("click", async (event) => {
 });
 
 mustElement("vless-clients").addEventListener("click", async (event) => {
-  const target = event.target;
-  if (!(target instanceof HTMLButtonElement)) {
+  const target = actionButton(event);
+  if (!target) {
     return;
   }
 
@@ -455,8 +455,8 @@ mustElement("vless-clients").addEventListener("click", async (event) => {
 });
 
 mustElement("wireguard-clients").addEventListener("click", async (event) => {
-  const target = event.target;
-  if (!(target instanceof HTMLButtonElement)) {
+  const target = actionButton(event);
+  if (!target) {
     return;
   }
 
@@ -469,8 +469,8 @@ mustElement("wireguard-clients").addEventListener("click", async (event) => {
 });
 
 mustElement("whitelists").addEventListener("click", async (event) => {
-  const target = event.target;
-  if (!(target instanceof HTMLButtonElement)) {
+  const target = actionButton(event);
+  if (!target) {
     return;
   }
   const id = target.dataset.whitelist;
@@ -633,7 +633,7 @@ function renderProfileActions(client: Client, canDownload: boolean, downloadActi
       <button class="btn btn-sm btn-outline-primary" type="button" data-action="qr-vless" data-client="${escapeHtml(client.name)}">${buttonLabel(`vless:qr:${client.name}`, "QR")}</button>
       <button class="btn btn-sm btn-outline-primary" type="button" data-action="open-happ" data-client="${escapeHtml(client.name)}">Happ</button>
       <button class="btn btn-sm btn-outline-primary" type="button" data-action="open-incy" data-client="${escapeHtml(client.name)}">INCY</button>
-      <button class="btn btn-sm btn-outline-secondary" type="button" data-action="copy-vless-sub" data-client="${escapeHtml(client.name)}">${buttonLabel(`vless:sub:${client.name}`, "Subscription")}</button>
+      <button class="btn btn-sm btn-outline-secondary" type="button" data-action="copy-vless-sub" data-client="${escapeHtml(client.name)}">${buttonLabel(`vless:sub:${client.name}`, "Sub URL")}</button>
       <button class="btn btn-sm btn-outline-secondary" type="button" data-action="download" data-client="${escapeHtml(client.name)}">${buttonLabel(downloadAction, "TXT")}</button>
     </div>
   `;
@@ -761,6 +761,10 @@ async function copyVlessLink(name: string, field: "uri" | "subscriptionUrl"): Pr
   await withBusy(`Копирую ${label} ${name}...`, field === "uri" ? `vless:copy:${name}` : `vless:sub:${name}`, async () => {
     const info = await fetchJson<VlessLinkInfo>(`/api/vless/clients/${encodeURIComponent(name)}/link`);
     await copyText(info[field]);
+    if (field === "subscriptionUrl" && info.subscriptionUrl.startsWith("http://")) {
+      showNotice("Subscription URL скопирован, но для Happ/INCY обычно нужен HTTPS. Используй Happ/INCY или QR для прямой VLESS ссылки.");
+      return;
+    }
     showNotice(field === "uri" ? "VLESS ссылка скопирована" : "Subscription URL скопирован");
   });
 }
@@ -769,7 +773,7 @@ async function openVlessClient(name: string, field: "happUrl" | "incyUrl"): Prom
   const info = await fetchJson<VlessLinkInfo>(`/api/vless/clients/${encodeURIComponent(name)}/link`);
   await copyText(info.uri).catch(() => undefined);
   window.location.href = info[field];
-  showNotice("Ссылка скопирована. Если приложение не открылось, импортируй из буфера обмена или отсканируй QR.");
+  showNotice("Прямая VLESS ссылка скопирована. Если приложение не открылось, импортируй из буфера обмена или отсканируй QR.");
 }
 
 async function copyText(value: string): Promise<void> {
@@ -871,6 +875,13 @@ function showNotice(message: string): void {
 async function showResponseError(response: Response, fallback: string): Promise<void> {
   const data = await response.json().catch(() => ({})) as { message?: string; error?: string };
   showNotice(data.message || data.error || fallback);
+}
+
+function actionButton(event: Event): HTMLButtonElement | null {
+  if (!(event.target instanceof Element)) {
+    return null;
+  }
+  return event.target.closest<HTMLButtonElement>("button[data-action]");
 }
 
 function currentPublicHost(): string {

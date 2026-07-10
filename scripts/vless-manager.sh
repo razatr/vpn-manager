@@ -165,6 +165,7 @@ if (!publicHost || !publicKey) {
 }
 const params = new URLSearchParams({
   type: "tcp",
+  encryption: "none",
   security: "reality",
   pbk: publicKey,
   fp: "chrome",
@@ -177,6 +178,31 @@ const uri = `vless://${uuid}@${publicHost}:${port}?${params.toString()}#${encode
 fs.writeFileSync(profilePath, `${uri}\n`);
 NODE
   secure_profile "${PROFILE_DIR}/${name}.txt"
+}
+
+sync_profiles() {
+  if [[ ! -f "${XRAY_CONFIG}" ]]; then
+    return
+  fi
+  ensure_node
+  while IFS=$'\t' read -r name uuid; do
+    [[ -z "${name}" || -z "${uuid}" ]] && continue
+    profile_path="${PROFILE_DIR}/${name}.txt"
+    if [[ ! -f "${profile_path}" ]] || ! grep -q 'encryption=none' "${profile_path}"; then
+      write_client_profile "${name}" "${uuid}"
+    fi
+  done < <(node - "${XRAY_CONFIG}" <<'NODE'
+const fs = require("fs");
+const [configPath] = process.argv.slice(2);
+const config = JSON.parse(fs.readFileSync(configPath, "utf8"));
+const inbound = config.inbounds.find((item) => item.protocol === "vless");
+const clients = inbound?.settings?.clients || [];
+for (const client of clients) {
+  const name = client.email || client.id;
+  console.log(`${name}\t${client.id}`);
+}
+NODE
+)
 }
 
 install_vless() {
@@ -357,6 +383,7 @@ case "${COMMAND}" in
       printf '[]\n'
       exit 0
     fi
+    sync_profiles
     node - "${XRAY_CONFIG}" "${PROFILE_DIR}" <<'NODE'
 const fs = require("fs");
 const [configPath, profileDir] = process.argv.slice(2);
