@@ -229,7 +229,7 @@ async function handleApi({ req, res, url, config, store, providers }) {
     const body = await readJson(req);
     const name = validateClientName(body.name);
     const profile = await providers.vless.createClient(name);
-    const client = await store.createClient({
+    const client = await store.upsertClient({
       provider: "vless",
       name,
       status: profile.skipped ? "registered" : "active",
