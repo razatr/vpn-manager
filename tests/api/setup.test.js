@@ -31,7 +31,7 @@ async function withTestServer(providers, run) {
   assert.equal(typeof address, "object");
 
   try {
-    await run(`http://127.0.0.1:${address.port}`);
+    await run(`http://127.0.0.1:${address.port}`, store);
   } finally {
     await new Promise((resolve, reject) => {
       server.close((error) => error ? reject(error) : resolve());
@@ -137,4 +137,38 @@ test("WireGuard setup falls back to request host when public host is empty", asy
   });
 
   assert.equal(receivedOptions.publicHost, "127.0.0.1");
+});
+
+test("OpenVPN reset clears OpenVPN clients", async () => {
+  let resetCalled = false;
+  const providers = {
+    openvpn: {
+      async reset() {
+        resetCalled = true;
+        return { reset: true };
+      },
+      async listClients() {
+        return [];
+      }
+    }
+  };
+
+  await withTestServer(providers, async (baseUrl, store) => {
+    await store.createClient({
+      provider: "openvpn",
+      name: "admin",
+      status: "active",
+      profilePath: "/tmp/admin.ovpn"
+    });
+
+    const resetResponse = await fetch(`${baseUrl}/api/openvpn/reset`, {
+      method: "POST"
+    });
+    assert.equal(resetResponse.status, 200, await resetResponse.text());
+
+    const clients = await store.listClients("openvpn");
+    assert.deepEqual(clients, []);
+  });
+
+  assert.equal(resetCalled, true);
 });

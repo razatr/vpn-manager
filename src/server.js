@@ -222,6 +222,18 @@ async function handleApi({ req, res, url, config, store, providers }) {
     return;
   }
 
+  if (req.method === "POST" && url.pathname === "/api/openvpn/reset") {
+    const result = await providers.openvpn.reset();
+    await store.deleteClients("openvpn");
+    await store.addEvent({
+      type: "openvpn.reset",
+      provider: "openvpn",
+      message: "OpenVPN server config and profiles reset"
+    });
+    sendJson(res, 200, { ok: true, result });
+    return;
+  }
+
   if (req.method === "GET" && url.pathname === "/api/vless/clients") {
     const externalClients = await providers.vless.listClients();
     const clients = externalClients

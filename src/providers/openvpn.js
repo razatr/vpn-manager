@@ -74,6 +74,16 @@ export class OpenVPNProvider {
     return this.runJson(args);
   }
 
+  async reset() {
+    if (!(await exists(this.config.helperPath))) {
+      const error = new Error(`OpenVPN helper not found: ${this.config.helperPath}`);
+      error.statusCode = 500;
+      throw error;
+    }
+
+    return this.runJson(["reset"]);
+  }
+
   async revokeClient(name) {
     const status = await this.status();
     if (!status.installed) {

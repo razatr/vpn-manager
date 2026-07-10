@@ -149,6 +149,12 @@ export class JsonStore {
     return client;
   }
 
+  async deleteClients(provider) {
+    const db = await this.read();
+    db.clients = db.clients.filter((client) => client.provider !== provider);
+    await this.write(db);
+  }
+
   async listEvents() {
     const db = await this.read();
     return db.events.slice().reverse();

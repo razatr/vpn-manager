@@ -106,6 +106,7 @@ const state: State = {
 
 const refreshButton = mustElement<HTMLButtonElement>("refresh");
 const logoutButton = mustElement<HTMLButtonElement>("logout");
+const openvpnResetButton = mustElement<HTMLButtonElement>("openvpn-reset");
 const clientForm = mustElement<HTMLFormElement>("client-form");
 const clientNameInput = mustElement<HTMLInputElement>("client-name");
 const loginPanel = mustElement<HTMLElement>("login-panel");
@@ -341,6 +342,26 @@ wireguardSetupForm.addEventListener("submit", async (event) => {
   });
 });
 
+openvpnResetButton.addEventListener("click", async () => {
+  if (!window.confirm("Сбросить OpenVPN? Будут удалены серверный конфиг и все OpenVPN профили.")) {
+    return;
+  }
+
+  await withBusy("Сбрасываю OpenVPN...", "openvpn:reset", async () => {
+    const response = await fetch("/api/openvpn/reset", {
+      method: "POST"
+    });
+
+    if (!response.ok) {
+      await showResponseError(response, "Ошибка сброса OpenVPN");
+      return;
+    }
+
+    showNotice("OpenVPN сброшен. Можно выполнить первичную настройку заново.");
+    await load();
+  });
+});
+
 credentialsForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   const form = new FormData(credentialsForm);
@@ -506,8 +527,14 @@ function render(): void {
   mustElement<HTMLInputElement>("settings-username").value = state.server.auth.username;
   setBadge("openvpn-installed", openvpn.installed ? "Установлен" : "Не установлен", openvpn.installed ? "success" : "secondary");
   setBadge("openvpn-active", openvpn.active ? "Запущен" : "Остановлен", openvpn.active ? "success" : "danger");
-  mustElement("openvpn-status-log").textContent = openvpn.statusLogExists ? openvpn.statusLogPath : "не найден";
+  mustElement("openvpn-status-log").textContent = openvpn.statusLogExists
+    ? openvpn.statusLogPath
+    : openvpn.active
+      ? "ожидает подключений"
+      : "не найден";
   mustElement("openvpn-profile-dir").textContent = openvpn.profileDir;
+  openvpnResetButton.hidden = !openvpn.installed;
+  openvpnResetButton.innerHTML = buttonLabel("openvpn:reset", "Сбросить");
   if (vless) {
     setBadge("vless-installed", vless.installed ? "Установлен" : "Не установлен", vless.installed ? "success" : "secondary");
     setBadge("vless-active", vless.active ? "Запущен" : "Остановлен", vless.active ? "success" : "danger");

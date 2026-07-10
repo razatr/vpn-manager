@@ -87,6 +87,26 @@ ensure_status_log_config() {
   fi
 }
 
+reset_openvpn() {
+  if command -v systemctl >/dev/null 2>&1; then
+    systemctl disable --now "${SERVICE_NAME}" >/dev/null 2>&1 || true
+    systemctl disable --now openvpn-iptables.service >/dev/null 2>&1 || true
+  fi
+  rm -f /etc/systemd/system/openvpn-iptables.service
+  rm -f /etc/systemd/system/openvpn-server@server.service.d/disable-limitnproc.conf
+  rm -f /etc/sysctl.d/99-openvpn-forward.conf
+  rm -rf "${SERVER_DIR}"
+  rm -rf "${PROFILE_DIR}"
+  mkdir -p "${PROFILE_DIR}"
+  if getent group "${PROFILE_GROUP}" >/dev/null 2>&1; then
+    chgrp "${PROFILE_GROUP}" "${PROFILE_DIR}" 2>/dev/null || true
+  fi
+  if command -v systemctl >/dev/null 2>&1; then
+    systemctl daemon-reload >/dev/null 2>&1 || true
+  fi
+  printf '{"reset":true,"profileDir":%s}\n' "$(json_string "${PROFILE_DIR}")"
+}
+
 secure_profile() {
   local profile_path="$1"
   chmod 0640 "${profile_path}"
@@ -333,8 +353,11 @@ case "${COMMAND}" in
   install)
     install_openvpn "$@"
     ;;
+  reset)
+    reset_openvpn
+    ;;
   *)
-    echo "Usage: $0 {status|list-clients|create-client NAME|revoke-client NAME|list-connections|install [options]}" >&2
+    echo "Usage: $0 {status|list-clients|create-client NAME|revoke-client NAME|list-connections|install [options]|reset}" >&2
     exit 1
     ;;
 esac
