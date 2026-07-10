@@ -125,12 +125,12 @@ xray_uuid() {
 }
 
 xray_x25519_private() {
-  "${XRAY_BIN}" x25519 | awk -F': ' '/Private key/ { print $2 }'
+  "${XRAY_BIN}" x25519 | awk -F': ' '/PrivateKey|Private key/ { print $2 }'
 }
 
 xray_x25519_public() {
   local private_key="$1"
-  "${XRAY_BIN}" x25519 -i "${private_key}" | awk -F': ' '/Public key/ { print $2 }'
+  "${XRAY_BIN}" x25519 -i "${private_key}" | awk -F': ' '/PublicKey|Public key|Password \(PublicKey\)/ { print $2 }'
 }
 
 random_short_id() {
@@ -151,13 +151,18 @@ write_client_profile() {
   mkdir -p "${PROFILE_DIR}"
   node - "${XRAY_CONFIG}" "${PROFILE_DIR}/${name}.txt" "${PUBLIC_HOST}" "${PORT}" "${name}" "${uuid}" <<'NODE'
 const fs = require("fs");
-const [configPath, profilePath, publicHost, port, name, uuid] = process.argv.slice(2);
+let [configPath, profilePath, publicHost, port, name, uuid] = process.argv.slice(2);
 const config = JSON.parse(fs.readFileSync(configPath, "utf8"));
 const inbound = config.inbounds.find((item) => item.protocol === "vless");
 const reality = inbound.streamSettings.realitySettings;
 const sni = reality.serverNames[0];
 const shortId = reality.shortIds[0];
 const publicKey = config.vpnManager.realityPublicKey;
+publicHost = publicHost || config.vpnManager.publicHost;
+port = port || String(inbound.port || config.vpnManager.port || 443);
+if (!publicHost || !publicKey) {
+  throw new Error("VLESS profile metadata is incomplete");
+}
 const params = new URLSearchParams({
   type: "tcp",
   security: "reality",
@@ -225,10 +230,14 @@ install_vless() {
   public_key="$(xray_x25519_public "${private_key}")"
   short_id="$(random_short_id)"
   uuid="$(xray_uuid)"
+  if [[ -z "${private_key}" || -z "${public_key}" ]]; then
+    echo "Failed to generate Xray REALITY keys." >&2
+    exit 5
+  fi
 
-  node - "${XRAY_CONFIG}" "${PORT}" "${SNI}" "${DEST}" "${private_key}" "${public_key}" "${short_id}" "${first_client}" "${uuid}" <<'NODE'
+  node - "${XRAY_CONFIG}" "${PORT}" "${SNI}" "${DEST}" "${private_key}" "${public_key}" "${short_id}" "${first_client}" "${uuid}" "${PUBLIC_HOST}" <<'NODE'
 const fs = require("fs");
-const [configPath, port, sni, dest, privateKey, publicKey, shortId, firstClient, uuid] = process.argv.slice(2);
+const [configPath, port, sni, dest, privateKey, publicKey, shortId, firstClient, uuid, publicHost] = process.argv.slice(2);
 const config = {
   log: {
     loglevel: "warning"
@@ -276,6 +285,8 @@ const config = {
   vpnManager: {
     provider: "vless",
     mode: "reality",
+    publicHost,
+    port: Number(port),
     realityPublicKey: publicKey
   }
 };
