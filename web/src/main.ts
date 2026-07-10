@@ -268,7 +268,7 @@ setupForm.addEventListener("submit", async (event) => {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
-        publicHost: String(form.get("publicHost") || "").trim(),
+        publicHost: setupPublicHost(form),
         port: Number(form.get("port") || 1194),
         protocol: String(form.get("protocol") || "udp"),
         dns: Number(form.get("dns") || 3),
@@ -296,7 +296,7 @@ vlessSetupForm.addEventListener("submit", async (event) => {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
-        publicHost: String(form.get("publicHost") || "").trim(),
+        publicHost: setupPublicHost(form),
         port: Number(form.get("port") || 443),
         sni: String(form.get("sni") || "www.microsoft.com").trim(),
         dest: String(form.get("dest") || "www.microsoft.com:443").trim(),
@@ -324,7 +324,7 @@ wireguardSetupForm.addEventListener("submit", async (event) => {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
-        publicHost: String(form.get("publicHost") || "").trim(),
+        publicHost: setupPublicHost(form),
         port: Number(form.get("port") || 51820),
         dns: String(form.get("dns") || "1.1.1.1").trim(),
         firstClient
@@ -496,6 +496,8 @@ function render(): void {
   if (!state.server) {
     return;
   }
+
+  fillDefaultPublicHosts();
 
   const openvpn = state.server.providers.openvpn;
   const vless = state.server.providers.vless;
@@ -842,6 +844,22 @@ function showNotice(message: string): void {
 async function showResponseError(response: Response, fallback: string): Promise<void> {
   const data = await response.json().catch(() => ({})) as { message?: string; error?: string };
   showNotice(data.message || data.error || fallback);
+}
+
+function currentPublicHost(): string {
+  return window.location.hostname || "127.0.0.1";
+}
+
+function setupPublicHost(form: FormData): string {
+  return String(form.get("publicHost") || "").trim() || currentPublicHost();
+}
+
+function fillDefaultPublicHosts(): void {
+  for (const input of document.querySelectorAll<HTMLInputElement>('form input[name="publicHost"]')) {
+    if (!input.value.trim()) {
+      input.value = currentPublicHost();
+    }
+  }
 }
 
 function formatDate(value: string): string {

@@ -74,3 +74,67 @@ test("OpenVPN setup accepts and normalizes IPv4 public host", async () => {
   assert.equal(receivedOptions.publicHost, "147.45.226.160");
 });
 
+test("VLESS setup falls back to request host when public host is empty", async () => {
+  let receivedOptions = null;
+  const providers = {
+    vless: {
+      async install(options) {
+        receivedOptions = options;
+        return {
+          installed: true,
+          firstClient: options.firstClient,
+          profilePath: path.join(os.tmpdir(), `${options.firstClient}.txt`)
+        };
+      }
+    }
+  };
+
+  await withTestServer(providers, async (baseUrl) => {
+    const response = await fetch(`${baseUrl}/api/setup/vless`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        port: 443,
+        sni: "www.microsoft.com",
+        dest: "www.microsoft.com:443",
+        firstClient: "admin_vless"
+      })
+    });
+
+    assert.equal(response.status, 201, await response.text());
+  });
+
+  assert.equal(receivedOptions.publicHost, "127.0.0.1");
+});
+
+test("WireGuard setup falls back to request host when public host is empty", async () => {
+  let receivedOptions = null;
+  const providers = {
+    wireguard: {
+      async install(options) {
+        receivedOptions = options;
+        return {
+          installed: true,
+          firstClient: options.firstClient,
+          profilePath: path.join(os.tmpdir(), `${options.firstClient}.conf`)
+        };
+      }
+    }
+  };
+
+  await withTestServer(providers, async (baseUrl) => {
+    const response = await fetch(`${baseUrl}/api/setup/wireguard`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        port: 51820,
+        dns: "1.1.1.1",
+        firstClient: "admin_wg"
+      })
+    });
+
+    assert.equal(response.status, 201, await response.text());
+  });
+
+  assert.equal(receivedOptions.publicHost, "127.0.0.1");
+});

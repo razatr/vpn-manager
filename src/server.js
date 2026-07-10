@@ -118,7 +118,7 @@ async function handleApi({ req, res, url, config, store, providers }) {
   }
 
   if (req.method === "POST" && url.pathname === "/api/setup/openvpn") {
-    const body = await readJson(req);
+    const body = withDefaultPublicHost(await readJson(req), req, config);
     const setup = await providers.openvpn.install(validateOpenVPNSetup(body));
     const firstClientName = setup.firstClient || body.firstClient || "admin";
     const client = await store.upsertClient({
@@ -137,7 +137,7 @@ async function handleApi({ req, res, url, config, store, providers }) {
   }
 
   if (req.method === "POST" && url.pathname === "/api/setup/vless") {
-    const body = await readJson(req);
+    const body = withDefaultPublicHost(await readJson(req), req, config);
     const setup = await providers.vless.install(validateVlessSetup(body));
     const firstClientName = setup.firstClient || body.firstClient || "admin";
     const client = await store.upsertClient({
@@ -237,7 +237,7 @@ async function handleApi({ req, res, url, config, store, providers }) {
   }
 
   if (req.method === "POST" && url.pathname === "/api/setup/wireguard") {
-    const body = await readJson(req);
+    const body = withDefaultPublicHost(await readJson(req), req, config);
     const setup = await providers.wireguard.install(validateWireGuardSetup(body));
     const firstClientName = setup.firstClient || body.firstClient || "admin";
     const client = await store.upsertClient({
@@ -483,6 +483,34 @@ function publicBaseUrl(req, config) {
     return `${proto}://${host}`;
   }
   return config.publicUrl.replace(/\/$/, "");
+}
+
+function requestPublicHost(req, config) {
+  const forwardedHost = Array.isArray(req.headers["x-forwarded-host"])
+    ? req.headers["x-forwarded-host"][0]
+    : req.headers["x-forwarded-host"];
+  const rawHost = String(forwardedHost || req.headers.host || "").split(",")[0].trim();
+  if (rawHost) {
+    try {
+      return new URL(`http://${rawHost}`).hostname;
+    } catch {
+      return rawHost.split(":")[0];
+    }
+  }
+
+  try {
+    return new URL(config.publicUrl).hostname;
+  } catch {
+    return "";
+  }
+}
+
+function withDefaultPublicHost(body, req, config) {
+  const publicHost = typeof body.publicHost === "string" ? body.publicHost.trim() : "";
+  if (publicHost) {
+    return { ...body, publicHost };
+  }
+  return { ...body, publicHost: requestPublicHost(req, config) };
 }
 
 function isAuthorized(req, config) {
