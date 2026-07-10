@@ -3,7 +3,6 @@ import http from "node:http";
 import path from "node:path";
 import crypto from "node:crypto";
 import { fileURLToPath } from "node:url";
-import QRCode from "qrcode";
 import { saveConfig } from "./config.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -383,21 +382,6 @@ async function handleApi({ req, res, url, config, store, providers }) {
       happUrl: uri,
       incyUrl: uri
     });
-    return;
-  }
-
-  if (req.method === "GET" && /^\/api\/vless\/clients\/[^/]+\/qr.svg$/.test(url.pathname)) {
-    const name = validateClientName(decodeURIComponent(url.pathname.split("/")[4]));
-    const client = await store.findClient({ provider: "vless", name });
-    const uri = readClientProfileUri(client);
-    const svg = await QRCode.toString(uri, {
-      type: "svg",
-      errorCorrectionLevel: "M",
-      margin: 1,
-      width: 280
-    });
-    res.writeHead(200, { "content-type": "image/svg+xml; charset=utf-8" });
-    res.end(svg);
     return;
   }
 

@@ -1,4 +1,5 @@
 import "bootstrap/dist/css/bootstrap.min.css";
+import QRCode from "qrcode";
 import "./styles.css";
 
 type ServerStatus = {
@@ -765,13 +766,14 @@ async function copyText(value: string): Promise<void> {
 
 async function showVlessQr(name: string): Promise<void> {
   await withBusy(`Готовлю QR для ${name}...`, `vless:qr:${name}`, async () => {
-    const response = await fetch(`/api/vless/clients/${encodeURIComponent(name)}/qr.svg`);
-    if (!response.ok) {
-      await showResponseError(response, "Не удалось создать QR");
-      return;
-    }
+    const info = await fetchJson<VlessLinkInfo>(`/api/vless/clients/${encodeURIComponent(name)}/link`);
     qrTitle.textContent = `QR: ${name}`;
-    qrContent.innerHTML = await response.text();
+    qrContent.innerHTML = await QRCode.toString(info.uri, {
+      type: "svg",
+      errorCorrectionLevel: "M",
+      margin: 1,
+      width: 280
+    });
     qrPanel.hidden = false;
   });
 }
