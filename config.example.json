@@ -26,6 +26,15 @@
     "profileDir": "/var/lib/vpn-manager/profiles/vless",
     "profileGroup": "vpn-manager"
   },
+  "wireguard": {
+    "helperPath": "./scripts/wireguard-manager.sh",
+    "helperUseSudo": false,
+    "configPath": "/etc/wireguard/wg0.conf",
+    "profileDir": "/var/lib/vpn-manager/profiles/wireguard",
+    "profileGroup": "vpn-manager",
+    "interface": "wg0",
+    "port": 51820
+  },
   "whitelists": {
     "dataDir": "./data/whitelists"
   }

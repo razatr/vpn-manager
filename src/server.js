@@ -93,13 +93,14 @@ async function handleApi({ req, res, url, config, store, providers }) {
   if (req.method === "GET" && url.pathname === "/api/server/status") {
     const openvpn = await providers.openvpn.status();
     const vless = providers.vless ? await providers.vless.status() : null;
+    const wireguard = providers.wireguard ? await providers.wireguard.status() : null;
     sendJson(res, 200, {
       ok: true,
       publicUrl: config.publicUrl,
       auth: {
         username: config.auth.username
       },
-      providers: { openvpn, ...(vless ? { vless } : {}) }
+      providers: { openvpn, ...(vless ? { vless } : {}), ...(wireguard ? { wireguard } : {}) }
     });
     return;
   }
@@ -227,6 +228,74 @@ async function handleApi({ req, res, url, config, store, providers }) {
 
   if (req.method === "GET" && url.pathname === "/api/whitelists/status") {
     sendJson(res, 200, await providers.whitelists.status());
+    return;
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/setup/wireguard") {
+    const body = await readJson(req);
+    const setup = await providers.wireguard.install(validateWireGuardSetup(body));
+    const firstClientName = setup.firstClient || body.firstClient || "admin";
+    const client = await store.upsertClient({
+      provider: "wireguard",
+      name: firstClientName,
+      status: "active",
+      profilePath: setup.profilePath || null
+    });
+    await store.addEvent({
+      type: "wireguard.installed",
+      provider: "wireguard",
+      message: `WireGuard installed with first client ${firstClientName}`
+    });
+    sendJson(res, 201, { setup, client });
+    return;
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/wireguard/clients") {
+    const externalClients = await providers.wireguard.listClients();
+    const clients = externalClients
+      ? await store.syncClients("wireguard", externalClients)
+      : await store.listClients("wireguard");
+    sendJson(res, 200, { clients });
+    return;
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/wireguard/clients") {
+    const body = await readJson(req);
+    const name = validateClientName(body.name);
+    const profile = await providers.wireguard.createClient(name);
+    const client = await store.upsertClient({
+      provider: "wireguard",
+      name,
+      status: "active",
+      profilePath: profile.profilePath || null
+    });
+    await store.addEvent({
+      type: "client.created",
+      provider: "wireguard",
+      message: `WireGuard client ${name} created`
+    });
+    sendJson(res, 201, { client });
+    return;
+  }
+
+  if (req.method === "GET" && /^\/api\/wireguard\/clients\/[^/]+\/profile$/.test(url.pathname)) {
+    const name = validateClientName(decodeURIComponent(url.pathname.split("/")[4]));
+    const client = await store.findClient({ provider: "wireguard", name });
+    if (!client || !client.profilePath || !canRead(client.profilePath)) {
+      sendJson(res, 404, { error: "profile_not_found" });
+      return;
+    }
+
+    res.writeHead(200, {
+      "content-type": "text/plain; charset=utf-8",
+      "content-disposition": `attachment; filename="${client.name}-wireguard.conf"`
+    });
+    fs.createReadStream(client.profilePath)
+      .on("error", (error) => {
+        console.error(error);
+        res.destroy(error);
+      })
+      .pipe(res);
     return;
   }
 
@@ -536,6 +605,37 @@ function validateVlessSetup(body) {
     port,
     sni,
     dest,
+    firstClient
+  };
+}
+
+function validateWireGuardSetup(body) {
+  const firstClient = validateClientName(body.firstClient || "admin");
+  const port = Number(body.port || 51820);
+  if (!Number.isInteger(port) || port < 1 || port > 65535) {
+    const error = new Error("Port must be between 1 and 65535");
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const publicHost = body.publicHost || "";
+  if (!publicHost || !/^[a-zA-Z0-9._-]+$/.test(publicHost)) {
+    const error = new Error("Public host must be a hostname or IPv4 address");
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const dns = body.dns || "1.1.1.1";
+  if (!/^[a-zA-Z0-9:., _-]+$/.test(dns)) {
+    const error = new Error("DNS contains unsupported characters");
+    error.statusCode = 400;
+    throw error;
+  }
+
+  return {
+    publicHost,
+    port,
+    dns,
     firstClient
   };
 }

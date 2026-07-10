@@ -4,6 +4,7 @@ import { loadConfig } from "./config.js";
 import { JsonStore } from "./store.js";
 import { OpenVPNProvider } from "./providers/openvpn.js";
 import { VlessProvider } from "./providers/vless.js";
+import { WireGuardProvider } from "./providers/wireguard.js";
 import { WhitelistProvider } from "./providers/whitelists.js";
 
 const config = loadConfig(process.env.VPN_MANAGER_CONFIG);
@@ -13,6 +14,7 @@ await store.init();
 const providers = {
   openvpn: new OpenVPNProvider(config.openvpn),
   vless: new VlessProvider(config.vless),
+  wireguard: new WireGuardProvider(config.wireguard),
   whitelists: new WhitelistProvider(config.whitelists)
 };
 

@@ -22,6 +22,14 @@ type ServerStatus = {
       configPath: string;
       profileDir: string;
     };
+    wireguard?: {
+      installed: boolean;
+      active: boolean;
+      configPath: string;
+      profileDir: string;
+      interface: string;
+      port: number;
+    };
   };
 };
 
@@ -29,7 +37,7 @@ type ClientStatus = "active" | "registered" | "missing_profile" | "missing" | "r
 
 type Client = {
   id: string;
-  provider: "openvpn" | "vless";
+  provider: "openvpn" | "vless" | "wireguard";
   name: string;
   status: ClientStatus;
   createdAt: string;
@@ -68,6 +76,7 @@ type State = {
   server: ServerStatus | null;
   openvpnClients: Client[];
   vlessClients: Client[];
+  wireguardClients: Client[];
   events: EventItem[];
   connections: Connection[];
   whitelists: WhitelistItem[];
@@ -79,6 +88,7 @@ const state: State = {
   server: null,
   openvpnClients: [],
   vlessClients: [],
+  wireguardClients: [],
   events: [],
   connections: [],
   whitelists: [],
@@ -102,6 +112,10 @@ const vlessSetupPanel = mustElement<HTMLElement>("vless-setup-panel");
 const vlessSetupForm = mustElement<HTMLFormElement>("vless-setup-form");
 const vlessClientForm = mustElement<HTMLFormElement>("vless-client-form");
 const vlessClientNameInput = mustElement<HTMLInputElement>("vless-client-name");
+const wireguardSetupPanel = mustElement<HTMLElement>("wireguard-setup-panel");
+const wireguardSetupForm = mustElement<HTMLFormElement>("wireguard-setup-form");
+const wireguardClientForm = mustElement<HTMLFormElement>("wireguard-client-form");
+const wireguardClientNameInput = mustElement<HTMLInputElement>("wireguard-client-name");
 const credentialsForm = mustElement<HTMLFormElement>("credentials-form");
 const globalBusy = mustElement<HTMLElement>("global-busy");
 const notice = mustElement<HTMLElement>("notice");
@@ -202,6 +216,31 @@ vlessClientForm.addEventListener("submit", async (event) => {
   });
 });
 
+wireguardClientForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const name = wireguardClientNameInput.value.trim();
+  if (!name) {
+    return;
+  }
+
+  await withBusy(`Создаю WireGuard профиль ${name}...`, `wireguard:create:${name}`, async () => {
+    const response = await fetch("/api/wireguard/clients", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ name })
+    });
+
+    if (!response.ok) {
+      await showResponseError(response, "Ошибка создания WireGuard клиента");
+      return;
+    }
+
+    wireguardClientNameInput.value = "";
+    showNotice(`WireGuard профиль ${name} создан`);
+    await load();
+  });
+});
+
 setupForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   const form = new FormData(setupForm);
@@ -254,6 +293,33 @@ vlessSetupForm.addEventListener("submit", async (event) => {
     }
 
     showNotice(`VLESS установлен, первый профиль: ${firstClient}`);
+    await load();
+  });
+});
+
+wireguardSetupForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const form = new FormData(wireguardSetupForm);
+  const firstClient = String(form.get("firstClient") || "admin").trim();
+
+  await withBusy("Устанавливаю WireGuard и готовлю первый профиль...", "wireguard:setup", async () => {
+    const response = await fetch("/api/setup/wireguard", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        publicHost: String(form.get("publicHost") || "").trim(),
+        port: Number(form.get("port") || 51820),
+        dns: String(form.get("dns") || "1.1.1.1").trim(),
+        firstClient
+      })
+    });
+
+    if (!response.ok) {
+      await showResponseError(response, "Ошибка установки WireGuard");
+      return;
+    }
+
+    showNotice(`WireGuard установлен, первый профиль: ${firstClient}`);
     await load();
   });
 });
@@ -331,6 +397,20 @@ mustElement("vless-clients").addEventListener("click", async (event) => {
   await downloadProfile("vless", client);
 });
 
+mustElement("wireguard-clients").addEventListener("click", async (event) => {
+  const target = event.target;
+  if (!(target instanceof HTMLButtonElement)) {
+    return;
+  }
+
+  const client = target.dataset.client;
+  if (!client || target.dataset.action !== "download") {
+    return;
+  }
+
+  await downloadProfile("wireguard", client);
+});
+
 mustElement("whitelists").addEventListener("click", async (event) => {
   const target = event.target;
   if (!(target instanceof HTMLButtonElement)) {
@@ -344,10 +424,11 @@ mustElement("whitelists").addEventListener("click", async (event) => {
 });
 
 async function load(): Promise<void> {
-  const [server, openvpnClients, vlessClients, whitelists, events, connections] = await Promise.all([
+  const [server, openvpnClients, vlessClients, wireguardClients, whitelists, events, connections] = await Promise.all([
     fetchJson<ServerStatus>("/api/server/status"),
     fetchJson<{ clients: Client[] }>("/api/openvpn/clients"),
     fetchJson<{ clients: Client[] }>("/api/vless/clients"),
+    fetchJson<{ clients: Client[] }>("/api/wireguard/clients"),
     fetchJson<{ lists: WhitelistItem[] }>("/api/whitelists/status"),
     fetchJson<{ events: EventItem[] }>("/api/events"),
     fetchJson<{ connections: Connection[] }>("/api/openvpn/connections")
@@ -356,6 +437,7 @@ async function load(): Promise<void> {
   state.server = server;
   state.openvpnClients = openvpnClients.clients;
   state.vlessClients = vlessClients.clients;
+  state.wireguardClients = wireguardClients.clients;
   state.events = events.events;
   state.connections = connections.connections;
   state.whitelists = whitelists.lists;
@@ -381,6 +463,7 @@ function render(): void {
 
   const openvpn = state.server.providers.openvpn;
   const vless = state.server.providers.vless;
+  const wireguard = state.server.providers.wireguard;
   mustElement("server-state").textContent = state.server.ok ? "API работает" : "API недоступен";
   mustElement<HTMLInputElement>("settings-username").value = state.server.auth.username;
   setBadge("openvpn-installed", openvpn.installed ? "Установлен" : "Не установлен", openvpn.installed ? "success" : "secondary");
@@ -396,6 +479,14 @@ function render(): void {
   setupPanel.hidden = openvpn.installed;
   vlessSetupPanel.hidden = Boolean(vless?.installed);
   vlessClientForm.hidden = !Boolean(vless?.installed);
+  if (wireguard) {
+    setBadge("wireguard-installed", wireguard.installed ? "Установлен" : "Не установлен", wireguard.installed ? "success" : "secondary");
+    setBadge("wireguard-active", wireguard.active ? "Запущен" : "Остановлен", wireguard.active ? "success" : "danger");
+    mustElement("wireguard-config").textContent = wireguard.configPath;
+    mustElement("wireguard-profile-dir").textContent = wireguard.profileDir;
+  }
+  wireguardSetupPanel.hidden = Boolean(wireguard?.installed);
+  wireguardClientForm.hidden = !Boolean(wireguard?.installed);
 
   mustElement("openvpn-clients").innerHTML = state.openvpnClients.length
     ? renderClientsTable(state.openvpnClients)
@@ -404,6 +495,10 @@ function render(): void {
   mustElement("vless-clients").innerHTML = state.vlessClients.length
     ? renderClientsTable(state.vlessClients)
     : `<div class="empty-state">VLESS клиентов пока нет</div>`;
+
+  mustElement("wireguard-clients").innerHTML = state.wireguardClients.length
+    ? renderClientsTable(state.wireguardClients)
+    : `<div class="empty-state">WireGuard клиентов пока нет</div>`;
 
   mustElement("events").innerHTML = state.events.length
     ? state.events.map(renderEvent).join("")
@@ -555,7 +650,7 @@ function setBadge(id: string, text: string, tone: string): void {
   element.textContent = text;
 }
 
-async function downloadProfile(provider: "openvpn" | "vless", name: string): Promise<void> {
+async function downloadProfile(provider: "openvpn" | "vless" | "wireguard", name: string): Promise<void> {
   await withBusy(`Готовлю файл профиля ${name}...`, `${provider}:download:${name}`, async () => {
     const response = await fetch(`/api/${provider}/clients/${encodeURIComponent(name)}/profile`);
     if (!response.ok) {
@@ -565,11 +660,11 @@ async function downloadProfile(provider: "openvpn" | "vless", name: string): Pro
     }
 
     const blob = await response.blob();
-    const extension = provider === "openvpn" ? "ovpn" : "txt";
+    const extension = provider === "openvpn" ? "ovpn" : provider === "wireguard" ? "conf" : "txt";
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = provider === "openvpn" ? `${name}.ovpn` : `${name}-vless.txt`;
+    link.download = provider === "openvpn" ? `${name}.ovpn` : provider === "wireguard" ? `${name}-wireguard.conf` : `${name}-vless.txt`;
     document.body.append(link);
     link.click();
     link.remove();

@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>VPN Manager</title>
-    <script type="module" crossorigin src="/assets/index-42sww3Hb.js"></script>
+    <script type="module" crossorigin src="/assets/index-YArdMe-i.js"></script>
     <link rel="stylesheet" crossorigin href="/assets/index-BXZQSxKK.css">
   </head>
   <body>
@@ -115,6 +115,37 @@
 
       <section class="panel">
         <div class="section-head">
+          <h2>WireGuard</h2>
+          <div class="toolbar">
+            <span id="wireguard-installed" class="badge text-bg-secondary">-</span>
+            <span id="wireguard-active" class="badge text-bg-secondary">-</span>
+          </div>
+        </div>
+        <dl class="status-grid">
+          <div>
+            <dt>Config</dt>
+            <dd id="wireguard-config">-</dd>
+          </div>
+          <div>
+            <dt>Профили</dt>
+            <dd id="wireguard-profile-dir">-</dd>
+          </div>
+        </dl>
+      </section>
+
+      <section id="wireguard-setup-panel" class="panel" hidden>
+        <h2>Первичная настройка WireGuard</h2>
+        <form id="wireguard-setup-form" class="setup-form">
+          <input class="form-control" name="publicHost" placeholder="IP или домен" autocomplete="off">
+          <input class="form-control" name="port" type="number" min="1" max="65535" value="51820">
+          <input class="form-control" name="dns" value="1.1.1.1" autocomplete="off">
+          <input class="form-control" name="firstClient" value="admin" autocomplete="off">
+          <button class="btn btn-primary" type="submit">Установить</button>
+        </form>
+      </section>
+
+      <section class="panel">
+        <div class="section-head">
           <h2>OpenVPN клиенты</h2>
           <form id="client-form" class="inline-form">
             <input id="client-name" class="form-control" name="name" placeholder="client_name" autocomplete="off">
@@ -133,6 +164,17 @@
           </form>
         </div>
         <div id="vless-clients" class="content-list"></div>
+      </section>
+
+      <section class="panel">
+        <div class="section-head">
+          <h2>WireGuard клиенты</h2>
+          <form id="wireguard-client-form" class="inline-form">
+            <input id="wireguard-client-name" class="form-control" name="name" placeholder="client_name" autocomplete="off">
+            <button class="btn btn-primary" type="submit">Создать</button>
+          </form>
+        </div>
+        <div id="wireguard-clients" class="content-list"></div>
       </section>
 
       <section class="panel">

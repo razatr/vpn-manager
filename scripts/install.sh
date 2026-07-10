@@ -10,6 +10,7 @@ LOG_DIR="/var/log/vpn-manager"
 HELPER_DIR="/usr/local/lib/vpn-manager"
 HELPER_PATH="${HELPER_DIR}/openvpn-helper"
 VLESS_HELPER_PATH="${HELPER_DIR}/vless-helper"
+WIREGUARD_HELPER_PATH="${HELPER_DIR}/wireguard-helper"
 SUDOERS_FILE="/etc/sudoers.d/vpn-manager"
 SERVICE_FILE="/etc/systemd/system/vpn-manager.service"
 PORT="${VPN_MANAGER_PORT:-80}"
@@ -121,9 +122,11 @@ fi
 cp -R ./package.json ./package-lock.json ./src ./web ./scripts "${APP_DIR}/"
 cp ./scripts/openvpn-manager.sh "${HELPER_PATH}"
 cp ./scripts/vless-manager.sh "${VLESS_HELPER_PATH}"
+cp ./scripts/wireguard-manager.sh "${WIREGUARD_HELPER_PATH}"
 cp -R ./third_party "${HELPER_DIR}/"
 chmod 0755 "${HELPER_PATH}"
 chmod 0755 "${VLESS_HELPER_PATH}"
+chmod 0755 "${WIREGUARD_HELPER_PATH}"
 cp ./config.example.json "${CONFIG_DIR}/config.json"
 
 VPN_MANAGER_ADMIN_USERNAME="${ADMIN_USERNAME}" VPN_MANAGER_ADMIN_PASSWORD="${ADMIN_PASSWORD}" node -e "
@@ -153,6 +156,13 @@ config.vless.helperUseSudo = true;
 config.vless.configPath = '/etc/xray/config.json';
 config.vless.profileDir = '${DATA_DIR}/profiles/vless';
 config.vless.profileGroup = '${APP_USER}';
+config.wireguard.helperPath = '${WIREGUARD_HELPER_PATH}';
+config.wireguard.helperUseSudo = true;
+config.wireguard.configPath = '/etc/wireguard/wg0.conf';
+config.wireguard.profileDir = '${DATA_DIR}/profiles/wireguard';
+config.wireguard.profileGroup = '${APP_USER}';
+config.wireguard.interface = 'wg0';
+config.wireguard.port = 51820;
 config.whitelists.dataDir = '${DATA_DIR}/whitelists';
 fs.writeFileSync(path, JSON.stringify(config, null, 2) + '\n');
 " 
@@ -160,6 +170,7 @@ fs.writeFileSync(path, JSON.stringify(config, null, 2) + '\n');
 cat > "${SUDOERS_FILE}" <<SUDOERS
 ${APP_USER} ALL=(root) NOPASSWD:SETENV: ${HELPER_PATH}
 ${APP_USER} ALL=(root) NOPASSWD:SETENV: ${VLESS_HELPER_PATH}
+${APP_USER} ALL=(root) NOPASSWD:SETENV: ${WIREGUARD_HELPER_PATH}
 SUDOERS
 chmod 0440 "${SUDOERS_FILE}"
 if command -v visudo >/dev/null 2>&1; then
@@ -196,6 +207,7 @@ chown root:"${APP_USER}" "${CONFIG_DIR}/config.json"
 chown -R "${APP_USER}:${APP_USER}" "${DATA_DIR}" "${LOG_DIR}"
 find "${DATA_DIR}/profiles/openvpn" -type f -name '*.ovpn' -exec chown root:"${APP_USER}" {} \; -exec chmod 0640 {} \; 2>/dev/null || true
 find "${DATA_DIR}/profiles/vless" -type f -name '*.txt' -exec chown root:"${APP_USER}" {} \; -exec chmod 0640 {} \; 2>/dev/null || true
+find "${DATA_DIR}/profiles/wireguard" -type f -name '*.conf' -exec chown root:"${APP_USER}" {} \; -exec chmod 0640 {} \; 2>/dev/null || true
 chmod 0660 "${CONFIG_DIR}/config.json"
 chmod 0644 "${SERVICE_FILE}"
 

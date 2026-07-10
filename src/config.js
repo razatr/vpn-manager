@@ -29,6 +29,15 @@ const defaultConfig = {
     profileDir: "/var/lib/vpn-manager/profiles/vless",
     profileGroup: "vpn-manager"
   },
+  wireguard: {
+    helperPath: "./scripts/wireguard-manager.sh",
+    helperUseSudo: false,
+    configPath: "/etc/wireguard/wg0.conf",
+    profileDir: "/var/lib/vpn-manager/profiles/wireguard",
+    profileGroup: "vpn-manager",
+    interface: "wg0",
+    port: 51820
+  },
   whitelists: {
     dataDir: "./data/whitelists"
   }
@@ -50,6 +59,9 @@ export function loadConfig(configPath) {
   }
   if (!path.isAbsolute(config.vless.helperPath)) {
     config.vless.helperPath = path.resolve(config.vless.helperPath);
+  }
+  if (!path.isAbsolute(config.wireguard.helperPath)) {
+    config.wireguard.helperPath = path.resolve(config.wireguard.helperPath);
   }
   if (!path.isAbsolute(config.whitelists.dataDir)) {
     config.whitelists.dataDir = path.resolve(config.whitelists.dataDir);
