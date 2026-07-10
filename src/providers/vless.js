@@ -112,7 +112,19 @@ function parseJsonOutput(stdout) {
   if (!trimmed) {
     return null;
   }
-  return JSON.parse(trimmed);
+
+  try {
+    return JSON.parse(trimmed);
+  } catch {
+    const jsonLine = trimmed
+      .split(/\r?\n/)
+      .reverse()
+      .find((line) => line.trim().startsWith("{") || line.trim().startsWith("["));
+    if (jsonLine) {
+      return JSON.parse(jsonLine);
+    }
+    throw new Error(`Helper did not return JSON: ${trimmed.slice(0, 200)}`);
+  }
 }
 
 async function exists(filePath) {
