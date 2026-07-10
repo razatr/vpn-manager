@@ -600,6 +600,16 @@ function hashPassword(password) {
   };
 }
 
+function normalizePublicHost(value, { required = false } = {}) {
+  const publicHost = typeof value === "string" ? value.trim() : "";
+  if ((required && !publicHost) || (publicHost && !/^[a-zA-Z0-9._-]+$/.test(publicHost))) {
+    const error = new Error("Public host must be a hostname or IPv4 address");
+    error.statusCode = 400;
+    throw error;
+  }
+  return publicHost;
+}
+
 function validateOpenVPNSetup(body) {
   const firstClient = validateClientName(body.firstClient || "admin");
   const protocol = body.protocol || "udp";
@@ -623,12 +633,7 @@ function validateOpenVPNSetup(body) {
     throw error;
   }
 
-  const publicHost = body.publicHost || "";
-  if (publicHost && !/^[a-zA-Z0-9._-]+$/.test(publicHost)) {
-    const error = new Error("Public host must be a hostname or IPv4 address");
-    error.statusCode = 400;
-    throw error;
-  }
+  const publicHost = normalizePublicHost(body.publicHost);
 
   return {
     publicHost,
@@ -649,12 +654,7 @@ function validateVlessSetup(body) {
     throw error;
   }
 
-  const publicHost = body.publicHost || "";
-  if (!publicHost || !/^[a-zA-Z0-9._-]+$/.test(publicHost)) {
-    const error = new Error("Public host must be a hostname or IPv4 address");
-    error.statusCode = 400;
-    throw error;
-  }
+  const publicHost = normalizePublicHost(body.publicHost, { required: true });
 
   const sni = body.sni || "www.microsoft.com";
   if (!/^[a-zA-Z0-9._-]+$/.test(sni)) {
@@ -688,12 +688,7 @@ function validateWireGuardSetup(body) {
     throw error;
   }
 
-  const publicHost = body.publicHost || "";
-  if (!publicHost || !/^[a-zA-Z0-9._-]+$/.test(publicHost)) {
-    const error = new Error("Public host must be a hostname or IPv4 address");
-    error.statusCode = 400;
-    throw error;
-  }
+  const publicHost = normalizePublicHost(body.publicHost, { required: true });
 
   const dns = body.dns || "1.1.1.1";
   if (!/^[a-zA-Z0-9:., _-]+$/.test(dns)) {
