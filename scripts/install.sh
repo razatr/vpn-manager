@@ -239,9 +239,11 @@ systemctl daemon-reload
 systemctl enable "${APP_NAME}.service"
 systemctl restart "${APP_NAME}.service"
 
+INSTALLED_URL="$(node -e "const fs = require('fs'); const config = JSON.parse(fs.readFileSync('${CONFIG_DIR}/config.json', 'utf8')); console.log(config.publicUrl || ('http://' + require('os').hostname() + ':' + config.port));")"
+
 echo
 echo "VPN Manager installed."
-echo "URL: http://$(hostname):${PORT}"
+echo "URL: ${INSTALLED_URL}"
 echo "Username: ${ADMIN_USERNAME}"
 echo "Password: ${ADMIN_PASSWORD}"
 echo "API token: ${ADMIN_TOKEN}"
