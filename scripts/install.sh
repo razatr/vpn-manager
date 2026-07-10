@@ -49,25 +49,34 @@ install_runtime_deps() {
 }
 
 install_runtime_deps
+echo "Runtime dependencies are ready."
 
 prompt_admin_credentials() {
   if [[ -n "${ADMIN_USERNAME}" && -n "${ADMIN_PASSWORD}" ]]; then
+    echo "Using admin credentials from environment."
     return
   fi
 
   if exec 3<>/dev/tty 2>/dev/null; then
+    printf '\n== VPN Manager admin account ==\n' >&3
+    printf 'The installer is waiting for login details for the web UI.\n' >&3
+    printf 'Press Enter to use defaults: admin / vpnpass.\n\n' >&3
     if [[ -z "${ADMIN_USERNAME}" ]]; then
-      read -r -p "Admin username [admin]: " ADMIN_USERNAME <&3 || true
+      printf 'Admin username [admin]: ' >&3
+      read -r ADMIN_USERNAME <&3 || true
       ADMIN_USERNAME="${ADMIN_USERNAME:-admin}"
     fi
     if [[ -z "${ADMIN_PASSWORD}" ]]; then
-      read -r -s -p "Admin password [vpnpass]: " ADMIN_PASSWORD <&3 || true
+      printf 'Admin password [vpnpass] (input is hidden): ' >&3
+      read -r -s ADMIN_PASSWORD <&3 || true
       printf '\n' >&3
       ADMIN_PASSWORD="${ADMIN_PASSWORD:-vpnpass}"
     fi
+    printf 'Credentials selected. Continuing installation...\n\n' >&3
     exec 3<&-
     exec 3>&-
   else
+    echo "No interactive terminal detected. Using default admin credentials."
     ADMIN_USERNAME="${ADMIN_USERNAME:-admin}"
     ADMIN_PASSWORD="${ADMIN_PASSWORD:-vpnpass}"
   fi

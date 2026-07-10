@@ -59,7 +59,7 @@ password: vpnpass
 Для полностью неинтерактивной установки:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/razatr/vpn-manager/main/install.sh | sudo VPN_MANAGER_ADMIN_USERNAME=admin VPN_MANAGER_ADMIN_PASSWORD='strong-password' bash
+curl -fsSL https://raw.githubusercontent.com/razatr/vpn-manager/main/install.sh | sudo env VPN_MANAGER_ADMIN_USERNAME=admin VPN_MANAGER_ADMIN_PASSWORD='strong-password' bash
 ```
 
 После установки открой:
