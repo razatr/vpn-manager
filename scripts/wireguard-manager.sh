@@ -86,17 +86,29 @@ write_client_profile() {
   local name="$1"
   local private_key="$2"
   local address="$3"
+  local endpoint_host="${PUBLIC_HOST}"
+  local endpoint_port="${PORT}"
+  local dns="${CLIENT_DNS}"
+  if [[ -z "${endpoint_host}" && -f "${WG_CONFIG}" ]]; then
+    endpoint_host="$(awk -F'=' '/^# vpn-manager-public-host=/ { print $2; exit }' "${WG_CONFIG}")"
+  fi
+  if [[ -f "${WG_CONFIG}" ]]; then
+    endpoint_port="$(awk -F'=' '/^# vpn-manager-port=/ { print $2; exit }' "${WG_CONFIG}")"
+    dns="$(awk -F'=' '/^# vpn-manager-dns=/ { print $2; exit }' "${WG_CONFIG}")"
+  fi
+  endpoint_port="${endpoint_port:-51820}"
+  dns="${dns:-1.1.1.1}"
   mkdir -p "${PROFILE_DIR}"
   profile_path="${PROFILE_DIR}/${name}.conf"
   cat > "${profile_path}" <<PROFILE
 [Interface]
 PrivateKey = ${private_key}
 Address = ${address}/32
-DNS = ${CLIENT_DNS}
+DNS = ${dns}
 
 [Peer]
 PublicKey = $(server_public_key)
-Endpoint = ${PUBLIC_HOST}:${PORT}
+Endpoint = ${endpoint_host}:${endpoint_port}
 AllowedIPs = 0.0.0.0/0, ::/0
 PersistentKeepalive = 25
 PROFILE
@@ -130,14 +142,20 @@ install_wireguard() {
   install_tools
   mkdir -p "$(dirname "${WG_CONFIG}")" "${PROFILE_DIR}"
   server_private="$(wg genkey)"
+  default_iface="$(ip route show default | awk '{ print $5; exit }')"
+  sysctl -w net.ipv4.ip_forward=1 >/dev/null 2>&1 || true
+  printf 'net.ipv4.ip_forward = 1\n' > /etc/sysctl.d/99-vpn-manager-wireguard.conf
   cat > "${WG_CONFIG}" <<CONF
+# vpn-manager-public-host=${PUBLIC_HOST}
+# vpn-manager-port=${PORT}
+# vpn-manager-dns=${CLIENT_DNS}
 [Interface]
 Address = ${SERVER_ADDRESS}
 ListenPort = ${PORT}
 PrivateKey = ${server_private}
 SaveConfig = false
-PostUp = sysctl -w net.ipv4.ip_forward=1 >/dev/null; iptables -t nat -A POSTROUTING -s 10.8.0.0/24 -o \$(ip route show default | awk '{print \$5; exit}') -j MASQUERADE
-PostDown = iptables -t nat -D POSTROUTING -s 10.8.0.0/24 -o \$(ip route show default | awk '{print \$5; exit}') -j MASQUERADE
+PostUp = iptables -t nat -A POSTROUTING -s 10.8.0.0/24 -o ${default_iface} -j MASQUERADE
+PostDown = iptables -t nat -D POSTROUTING -s 10.8.0.0/24 -o ${default_iface} -j MASQUERADE
 CONF
   chmod 0600 "${WG_CONFIG}"
   create_client
