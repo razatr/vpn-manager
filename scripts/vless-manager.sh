@@ -310,7 +310,7 @@ create_client() {
     exit 3
   fi
   uuid="$(xray_uuid)"
-  node - "${XRAY_CONFIG}" "${CLIENT}" "${uuid}" <<'NODE'
+  uuid="$(node - "${XRAY_CONFIG}" "${CLIENT}" "${uuid}" <<'NODE'
 const fs = require("fs");
 const [configPath, name, uuid] = process.argv.slice(2);
 const config = JSON.parse(fs.readFileSync(configPath, "utf8"));
@@ -318,8 +318,10 @@ const inbound = config.inbounds.find((item) => item.protocol === "vless");
 if (!inbound) {
   throw new Error("VLESS inbound not found");
 }
-if (inbound.settings.clients.some((client) => client.email === name)) {
-  throw new Error(`Client already exists: ${name}`);
+const existing = inbound.settings.clients.find((client) => client.email === name);
+if (existing) {
+  console.log(existing.id);
+  process.exit(0);
 }
 inbound.settings.clients.push({
   id: uuid,
@@ -327,7 +329,9 @@ inbound.settings.clients.push({
   flow: "xtls-rprx-vision"
 });
 fs.writeFileSync(configPath, JSON.stringify(config, null, 2) + "\n");
+console.log(uuid);
 NODE
+)"
   write_client_profile "${CLIENT}" "${uuid}"
   systemctl restart "${SERVICE_NAME}" 2>/dev/null || true
   printf '{"name":%s,"profilePath":%s}\n' "$(json_string "${CLIENT}")" "$(json_string "${PROFILE_DIR}/${CLIENT}.txt")"
