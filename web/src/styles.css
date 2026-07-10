@@ -160,6 +160,13 @@ dd {
   margin-bottom: 0;
 }
 
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
 .event-item,
 .empty-state {
   border: 1px solid var(--line);

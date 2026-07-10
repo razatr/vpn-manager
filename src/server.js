@@ -130,6 +130,25 @@ async function handleApi({ req, res, url, config, store, providers }) {
     return;
   }
 
+  if (req.method === "POST" && url.pathname === "/api/setup/vless") {
+    const body = await readJson(req);
+    const setup = await providers.vless.install(validateVlessSetup(body));
+    const firstClientName = setup.firstClient || body.firstClient || "admin";
+    const client = await store.upsertClient({
+      provider: "vless",
+      name: firstClientName,
+      status: "active",
+      profilePath: setup.profilePath || null
+    });
+    await store.addEvent({
+      type: "vless.installed",
+      provider: "vless",
+      message: `VLESS installed with first client ${firstClientName}`
+    });
+    sendJson(res, 201, { setup, client });
+    return;
+  }
+
   if (req.method === "GET" && url.pathname === "/api/openvpn/clients") {
     const externalClients = await providers.openvpn.listClients();
     const clients = externalClients
@@ -222,6 +241,27 @@ async function handleApi({ req, res, url, config, store, providers }) {
       message: profile.skipped ? `VLESS client ${name} registered` : `VLESS client ${name} created`
     });
     sendJson(res, 201, { client });
+    return;
+  }
+
+  if (req.method === "GET" && /^\/api\/vless\/clients\/[^/]+\/profile$/.test(url.pathname)) {
+    const name = validateClientName(decodeURIComponent(url.pathname.split("/")[4]));
+    const client = await store.findClient({ provider: "vless", name });
+    if (!client || !client.profilePath || !canRead(client.profilePath)) {
+      sendJson(res, 404, { error: "profile_not_found" });
+      return;
+    }
+
+    res.writeHead(200, {
+      "content-type": "text/plain; charset=utf-8",
+      "content-disposition": `attachment; filename="${client.name}-vless.txt"`
+    });
+    fs.createReadStream(client.profilePath)
+      .on("error", (error) => {
+        console.error(error);
+        res.destroy(error);
+      })
+      .pipe(res);
     return;
   }
 
@@ -425,6 +465,45 @@ function validateOpenVPNSetup(body) {
     protocol,
     dns,
     customDns: body.customDns || "",
+    firstClient
+  };
+}
+
+function validateVlessSetup(body) {
+  const firstClient = validateClientName(body.firstClient || "admin");
+  const port = Number(body.port || 443);
+  if (!Number.isInteger(port) || port < 1 || port > 65535) {
+    const error = new Error("Port must be between 1 and 65535");
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const publicHost = body.publicHost || "";
+  if (!publicHost || !/^[a-zA-Z0-9._-]+$/.test(publicHost)) {
+    const error = new Error("Public host must be a hostname or IPv4 address");
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const sni = body.sni || "www.microsoft.com";
+  if (!/^[a-zA-Z0-9._-]+$/.test(sni)) {
+    const error = new Error("SNI must be a hostname");
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const dest = body.dest || `${sni}:443`;
+  if (!/^[a-zA-Z0-9._-]+:[0-9]{1,5}$/.test(dest)) {
+    const error = new Error("Destination must be host:port");
+    error.statusCode = 400;
+    throw error;
+  }
+
+  return {
+    publicHost,
+    port,
+    sni,
+    dest,
     firstClient
   };
 }

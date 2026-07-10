@@ -29,7 +29,7 @@ type ClientStatus = "active" | "registered" | "missing_profile" | "missing" | "r
 
 type Client = {
   id: string;
-  provider: "openvpn";
+  provider: "openvpn" | "vless";
   name: string;
   status: ClientStatus;
   createdAt: string;
@@ -56,18 +56,22 @@ type Connection = {
 
 type State = {
   server: ServerStatus | null;
-  clients: Client[];
+  openvpnClients: Client[];
+  vlessClients: Client[];
   events: EventItem[];
   connections: Connection[];
   busy: boolean;
+  busyAction: string | null;
 };
 
 const state: State = {
   server: null,
-  clients: [],
+  openvpnClients: [],
+  vlessClients: [],
   events: [],
   connections: [],
-  busy: false
+  busy: false,
+  busyAction: null
 };
 
 const refreshButton = mustElement<HTMLButtonElement>("refresh");
@@ -82,12 +86,16 @@ const loginError = mustElement<HTMLElement>("login-error");
 const appShell = document.querySelector<HTMLElement>(".shell");
 const setupPanel = mustElement<HTMLElement>("setup-panel");
 const setupForm = mustElement<HTMLFormElement>("setup-form");
+const vlessSetupPanel = mustElement<HTMLElement>("vless-setup-panel");
+const vlessSetupForm = mustElement<HTMLFormElement>("vless-setup-form");
+const vlessClientForm = mustElement<HTMLFormElement>("vless-client-form");
+const vlessClientNameInput = mustElement<HTMLInputElement>("vless-client-name");
 const credentialsForm = mustElement<HTMLFormElement>("credentials-form");
 const globalBusy = mustElement<HTMLElement>("global-busy");
 const notice = mustElement<HTMLElement>("notice");
 
 refreshButton.addEventListener("click", () => {
-  void withBusy("Обновляю состояние...", load);
+  void withBusy("Обновляю состояние...", "app:refresh", load);
 });
 
 logoutButton.addEventListener("click", async () => {
@@ -98,7 +106,7 @@ logoutButton.addEventListener("click", async () => {
 loginForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   loginError.hidden = true;
-  await withBusy("Вхожу...", async () => {
+  await withBusy("Вхожу...", "auth:login", async () => {
     const response = await fetch("/api/auth/login", {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -126,7 +134,7 @@ clientForm.addEventListener("submit", async (event) => {
     return;
   }
 
-  await withBusy(`Создаю профиль ${name}...`, async () => {
+  await withBusy(`Создаю OpenVPN профиль ${name}...`, `openvpn:create:${name}`, async () => {
     const response = await fetch("/api/openvpn/clients", {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -144,12 +152,37 @@ clientForm.addEventListener("submit", async (event) => {
   });
 });
 
+vlessClientForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const name = vlessClientNameInput.value.trim();
+  if (!name) {
+    return;
+  }
+
+  await withBusy(`Создаю VLESS профиль ${name}...`, `vless:create:${name}`, async () => {
+    const response = await fetch("/api/vless/clients", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ name })
+    });
+
+    if (!response.ok) {
+      await showResponseError(response, "Ошибка создания VLESS клиента");
+      return;
+    }
+
+    vlessClientNameInput.value = "";
+    showNotice(`VLESS профиль ${name} создан`);
+    await load();
+  });
+});
+
 setupForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   const form = new FormData(setupForm);
   const firstClient = String(form.get("firstClient") || "admin").trim();
 
-  await withBusy("Устанавливаю OpenVPN. Это может занять несколько минут...", async () => {
+  await withBusy("Устанавливаю OpenVPN. Это может занять несколько минут...", "openvpn:setup", async () => {
     const response = await fetch("/api/setup/openvpn", {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -172,13 +205,41 @@ setupForm.addEventListener("submit", async (event) => {
   });
 });
 
+vlessSetupForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const form = new FormData(vlessSetupForm);
+  const firstClient = String(form.get("firstClient") || "admin").trim();
+
+  await withBusy("Устанавливаю VLESS/REALITY и готовлю первый профиль...", "vless:setup", async () => {
+    const response = await fetch("/api/setup/vless", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        publicHost: String(form.get("publicHost") || "").trim(),
+        port: Number(form.get("port") || 443),
+        sni: String(form.get("sni") || "www.microsoft.com").trim(),
+        dest: String(form.get("dest") || "www.microsoft.com:443").trim(),
+        firstClient
+      })
+    });
+
+    if (!response.ok) {
+      await showResponseError(response, "Ошибка установки VLESS");
+      return;
+    }
+
+    showNotice(`VLESS установлен, первый профиль: ${firstClient}`);
+    await load();
+  });
+});
+
 credentialsForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   const form = new FormData(credentialsForm);
   const username = String(form.get("username") || "").trim();
   const password = String(form.get("password") || "");
 
-  await withBusy("Сохраняю учётные данные...", async () => {
+  await withBusy("Сохраняю учётные данные...", "auth:save", async () => {
     const response = await fetch("/api/auth/credentials", {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -196,18 +257,27 @@ credentialsForm.addEventListener("submit", async (event) => {
   });
 });
 
-mustElement("clients").addEventListener("click", async (event) => {
+mustElement("openvpn-clients").addEventListener("click", async (event) => {
   const target = event.target;
   if (!(target instanceof HTMLButtonElement)) {
     return;
   }
 
   const client = target.dataset.client;
-  if (!client || target.dataset.action !== "revoke") {
+  if (!client) {
     return;
   }
 
-  await withBusy(`Отзываю профиль ${client}...`, async () => {
+  if (target.dataset.action === "download") {
+    await downloadProfile("openvpn", client);
+    return;
+  }
+
+  if (target.dataset.action !== "revoke") {
+    return;
+  }
+
+  await withBusy(`Отзываю OpenVPN профиль ${client}...`, `openvpn:revoke:${client}`, async () => {
     const response = await fetch(`/api/openvpn/clients/${encodeURIComponent(client)}/revoke`, {
       method: "POST"
     });
@@ -222,16 +292,32 @@ mustElement("clients").addEventListener("click", async (event) => {
   });
 });
 
+mustElement("vless-clients").addEventListener("click", async (event) => {
+  const target = event.target;
+  if (!(target instanceof HTMLButtonElement)) {
+    return;
+  }
+
+  const client = target.dataset.client;
+  if (!client || target.dataset.action !== "download") {
+    return;
+  }
+
+  await downloadProfile("vless", client);
+});
+
 async function load(): Promise<void> {
-  const [server, clients, events, connections] = await Promise.all([
+  const [server, openvpnClients, vlessClients, events, connections] = await Promise.all([
     fetchJson<ServerStatus>("/api/server/status"),
     fetchJson<{ clients: Client[] }>("/api/openvpn/clients"),
+    fetchJson<{ clients: Client[] }>("/api/vless/clients"),
     fetchJson<{ events: EventItem[] }>("/api/events"),
     fetchJson<{ connections: Connection[] }>("/api/openvpn/connections")
   ]);
 
   state.server = server;
-  state.clients = clients.clients;
+  state.openvpnClients = openvpnClients.clients;
+  state.vlessClients = vlessClients.clients;
   state.events = events.events;
   state.connections = connections.connections;
   render();
@@ -269,10 +355,16 @@ function render(): void {
     mustElement("vless-profile-dir").textContent = vless.profileDir;
   }
   setupPanel.hidden = openvpn.installed;
+  vlessSetupPanel.hidden = Boolean(vless?.installed);
+  vlessClientForm.hidden = !Boolean(vless?.installed);
 
-  mustElement("clients").innerHTML = state.clients.length
-    ? renderClientsTable(state.clients)
+  mustElement("openvpn-clients").innerHTML = state.openvpnClients.length
+    ? renderClientsTable(state.openvpnClients)
     : `<div class="empty-state">Клиентов пока нет</div>`;
+
+  mustElement("vless-clients").innerHTML = state.vlessClients.length
+    ? renderClientsTable(state.vlessClients)
+    : `<div class="empty-state">VLESS клиентов пока нет</div>`;
 
   mustElement("events").innerHTML = state.events.length
     ? state.events.map(renderEvent).join("")
@@ -305,12 +397,16 @@ function renderClientsTable(clients: Client[]): string {
 
 function renderClientRow(client: Client): string {
   const canDownload = Boolean(client.profilePath) && client.status !== "revoked";
+  const downloadAction = `${client.provider}:download:${client.name}`;
+  const revokeAction = `${client.provider}:revoke:${client.name}`;
   const profileLink = canDownload
-    ? `<a class="btn btn-sm btn-outline-primary" href="/api/openvpn/clients/${encodeURIComponent(client.name)}/profile">Скачать</a>`
+    ? `<button class="btn btn-sm btn-outline-primary" type="button" data-action="download" data-client="${escapeHtml(client.name)}">${buttonLabel(downloadAction, "Скачать")}</button>`
     : `<span class="text-secondary">нет файла</span>`;
   const revokeButton = client.status === "revoked"
     ? `<span class="text-secondary">отозван</span>`
-    : `<button class="btn btn-sm btn-outline-danger" type="button" data-action="revoke" data-client="${escapeHtml(client.name)}">Отозвать</button>`;
+    : client.provider === "openvpn"
+      ? `<button class="btn btn-sm btn-outline-danger" type="button" data-action="revoke" data-client="${escapeHtml(client.name)}">${buttonLabel(revokeAction, "Отозвать")}</button>`
+      : `<span class="text-secondary">-</span>`;
 
   return `
     <tr>
@@ -379,14 +475,41 @@ function setBadge(id: string, text: string, tone: string): void {
   element.textContent = text;
 }
 
-async function withBusy(message: string, action: () => Promise<void>): Promise<void> {
+async function downloadProfile(provider: "openvpn" | "vless", name: string): Promise<void> {
+  await withBusy(`Готовлю файл профиля ${name}...`, `${provider}:download:${name}`, async () => {
+    const response = await fetch(`/api/${provider}/clients/${encodeURIComponent(name)}/profile`);
+    if (!response.ok) {
+      await showResponseError(response, "Не удалось скачать профиль");
+      await load();
+      return;
+    }
+
+    const blob = await response.blob();
+    const extension = provider === "openvpn" ? "ovpn" : "txt";
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = provider === "openvpn" ? `${name}.ovpn` : `${name}-vless.txt`;
+    document.body.append(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+    showNotice(`Файл ${name}.${extension} готов`);
+  });
+}
+
+async function withBusy(message: string, actionKey: string, action: () => Promise<void>): Promise<void> {
   state.busy = true;
+  state.busyAction = actionKey;
   setBusy(true, message);
+  render();
   try {
     await action();
   } finally {
     state.busy = false;
+    state.busyAction = null;
     setBusy(false, "");
+    render();
   }
 }
 
@@ -396,6 +519,13 @@ function setBusy(isBusy: boolean, message: string): void {
   for (const element of document.querySelectorAll<HTMLButtonElement>("button")) {
     element.disabled = isBusy;
   }
+}
+
+function buttonLabel(actionKey: string, idleLabel: string): string {
+  if (state.busyAction !== actionKey) {
+    return escapeHtml(idleLabel);
+  }
+  return `<span class="spinner-border spinner-border-sm" aria-hidden="true"></span><span>${escapeHtml(idleLabel)}</span>`;
 }
 
 function showNotice(message: string): void {
@@ -465,6 +595,6 @@ function showApp(): void {
   }
 }
 
-void withBusy("Загружаю состояние...", load).catch((error: unknown) => {
+void withBusy("Загружаю состояние...", "app:load", load).catch((error: unknown) => {
   mustElement("server-state").textContent = error instanceof Error ? error.message : "Ошибка загрузки";
 });

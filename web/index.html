@@ -99,15 +99,38 @@
         </dl>
       </section>
 
+      <section id="vless-setup-panel" class="panel" hidden>
+        <h2>Первичная настройка VLESS</h2>
+        <form id="vless-setup-form" class="setup-form vless-setup-form">
+          <input class="form-control" name="publicHost" placeholder="IP или домен" autocomplete="off">
+          <input class="form-control" name="port" type="number" min="1" max="65535" value="443">
+          <input class="form-control" name="sni" value="www.microsoft.com" autocomplete="off">
+          <input class="form-control" name="dest" value="www.microsoft.com:443" autocomplete="off">
+          <input class="form-control" name="firstClient" value="admin" autocomplete="off">
+          <button class="btn btn-primary" type="submit">Установить</button>
+        </form>
+      </section>
+
       <section class="panel">
         <div class="section-head">
-          <h2>Клиенты</h2>
+          <h2>OpenVPN клиенты</h2>
           <form id="client-form" class="inline-form">
             <input id="client-name" class="form-control" name="name" placeholder="client_name" autocomplete="off">
             <button class="btn btn-primary" type="submit">Создать</button>
           </form>
         </div>
-        <div id="clients" class="content-list"></div>
+        <div id="openvpn-clients" class="content-list"></div>
+      </section>
+
+      <section class="panel">
+        <div class="section-head">
+          <h2>VLESS клиенты</h2>
+          <form id="vless-client-form" class="inline-form">
+            <input id="vless-client-name" class="form-control" name="name" placeholder="client_name" autocomplete="off">
+            <button class="btn btn-primary" type="submit">Создать</button>
+          </form>
+        </div>
+        <div id="vless-clients" class="content-list"></div>
       </section>
 
       <section class="panel">

@@ -26,7 +26,8 @@ const defaultConfig = {
     helperPath: "./scripts/vless-manager.sh",
     helperUseSudo: false,
     configPath: "/etc/xray/config.json",
-    profileDir: "/var/lib/vpn-manager/profiles/vless"
+    profileDir: "/var/lib/vpn-manager/profiles/vless",
+    profileGroup: "vpn-manager"
   }
 };
 

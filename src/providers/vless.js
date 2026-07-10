@@ -36,20 +36,46 @@ export class VlessProvider {
   async createClient(name) {
     const status = await this.status();
     if (!status.installed) {
-      return {
-        skipped: true,
-        reason: "vless_not_installed"
-      };
+      const error = new Error("VLESS is not installed");
+      error.statusCode = 409;
+      throw error;
     }
 
     return this.runJson(["create-client", name]);
   }
 
-  async runJson(args) {
+  async install(options) {
+    if (!(await exists(this.config.helperPath))) {
+      const error = new Error(`VLESS helper not found: ${this.config.helperPath}`);
+      error.statusCode = 500;
+      throw error;
+    }
+
+    const args = [
+      "install",
+      "--public-host",
+      options.publicHost,
+      "--port",
+      String(options.port || 443),
+      "--sni",
+      options.sni || "www.microsoft.com",
+      "--dest",
+      options.dest || `${options.sni || "www.microsoft.com"}:443`,
+      "--first-client",
+      options.firstClient || "admin"
+    ];
+
+    return this.runJson(args, { publicHost: options.publicHost, port: options.port });
+  }
+
+  async runJson(args, options = {}) {
     const command = this.config.helperUseSudo ? "sudo" : this.config.helperPath;
     const helperEnv = {
       VPN_MANAGER_VLESS_CONFIG: this.config.configPath,
-      VPN_MANAGER_VLESS_PROFILE_DIR: this.config.profileDir
+      VPN_MANAGER_VLESS_PROFILE_DIR: this.config.profileDir,
+      VPN_MANAGER_PROFILE_GROUP: this.config.profileGroup || "vpn-manager",
+      VPN_MANAGER_VLESS_PUBLIC_HOST: options.publicHost || this.config.publicHost || "",
+      VPN_MANAGER_VLESS_PORT: String(options.port || this.config.port || 443)
     };
     const commandArgs = this.config.helperUseSudo
       ? [
@@ -63,7 +89,7 @@ export class VlessProvider {
         ...process.env,
         ...helperEnv
       },
-      timeout: 120_000,
+      timeout: args[0] === "install" ? 300_000 : 120_000,
       maxBuffer: 1024 * 1024
     });
 

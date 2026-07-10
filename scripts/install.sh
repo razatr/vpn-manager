@@ -152,6 +152,7 @@ config.vless.helperPath = '${VLESS_HELPER_PATH}';
 config.vless.helperUseSudo = true;
 config.vless.configPath = '/etc/xray/config.json';
 config.vless.profileDir = '${DATA_DIR}/profiles/vless';
+config.vless.profileGroup = '${APP_USER}';
 fs.writeFileSync(path, JSON.stringify(config, null, 2) + '\n');
 " 
 
@@ -193,6 +194,7 @@ chown -R root:root "${HELPER_DIR}"
 chown root:"${APP_USER}" "${CONFIG_DIR}/config.json"
 chown -R "${APP_USER}:${APP_USER}" "${DATA_DIR}" "${LOG_DIR}"
 find "${DATA_DIR}/profiles/openvpn" -type f -name '*.ovpn' -exec chown root:"${APP_USER}" {} \; -exec chmod 0640 {} \; 2>/dev/null || true
+find "${DATA_DIR}/profiles/vless" -type f -name '*.txt' -exec chown root:"${APP_USER}" {} \; -exec chmod 0640 {} \; 2>/dev/null || true
 chmod 0660 "${CONFIG_DIR}/config.json"
 chmod 0644 "${SERVICE_FILE}"
 
