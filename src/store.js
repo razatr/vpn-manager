@@ -166,7 +166,9 @@ export class JsonStore {
   }
 
   async write(data) {
-    await fs.writeFile(this.dbPath, `${JSON.stringify(data, null, 2)}\n`);
+    const tmpPath = `${this.dbPath}.${crypto.randomUUID()}.tmp`;
+    await fs.writeFile(tmpPath, `${JSON.stringify(data, null, 2)}\n`);
+    await fs.rename(tmpPath, this.dbPath);
   }
 }
 

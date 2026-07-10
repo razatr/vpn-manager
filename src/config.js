@@ -28,6 +28,9 @@ const defaultConfig = {
     configPath: "/etc/xray/config.json",
     profileDir: "/var/lib/vpn-manager/profiles/vless",
     profileGroup: "vpn-manager"
+  },
+  whitelists: {
+    dataDir: "./data/whitelists"
   }
 };
 
@@ -47,6 +50,9 @@ export function loadConfig(configPath) {
   }
   if (!path.isAbsolute(config.vless.helperPath)) {
     config.vless.helperPath = path.resolve(config.vless.helperPath);
+  }
+  if (!path.isAbsolute(config.whitelists.dataDir)) {
+    config.whitelists.dataDir = path.resolve(config.whitelists.dataDir);
   }
 
   return config;

@@ -54,12 +54,23 @@ type Connection = {
   bytesSent: number;
 };
 
+type WhitelistItem = {
+  id: string;
+  name: string;
+  fileName: string;
+  sourceUrl: string;
+  updatedAt: string | null;
+  size: number;
+  exists: boolean;
+};
+
 type State = {
   server: ServerStatus | null;
   openvpnClients: Client[];
   vlessClients: Client[];
   events: EventItem[];
   connections: Connection[];
+  whitelists: WhitelistItem[];
   busy: boolean;
   busyAction: string | null;
 };
@@ -70,6 +81,7 @@ const state: State = {
   vlessClients: [],
   events: [],
   connections: [],
+  whitelists: [],
   busy: false,
   busyAction: null
 };
@@ -93,6 +105,7 @@ const vlessClientNameInput = mustElement<HTMLInputElement>("vless-client-name");
 const credentialsForm = mustElement<HTMLFormElement>("credentials-form");
 const globalBusy = mustElement<HTMLElement>("global-busy");
 const notice = mustElement<HTMLElement>("notice");
+const whitelistUpdateButton = mustElement<HTMLButtonElement>("whitelist-update");
 
 refreshButton.addEventListener("click", () => {
   void withBusy("Обновляю состояние...", "app:refresh", load);
@@ -101,6 +114,18 @@ refreshButton.addEventListener("click", () => {
 logoutButton.addEventListener("click", async () => {
   await fetch("/api/auth/logout", { method: "POST" });
   showLogin();
+});
+
+whitelistUpdateButton.addEventListener("click", async () => {
+  await withBusy("Обновляю белые списки из подписок...", "whitelists:update", async () => {
+    const response = await fetch("/api/whitelists/update", { method: "POST" });
+    if (!response.ok) {
+      await showResponseError(response, "Не удалось обновить белые списки");
+      return;
+    }
+    showNotice("Белые списки обновлены");
+    await load();
+  });
 });
 
 loginForm.addEventListener("submit", async (event) => {
@@ -306,11 +331,24 @@ mustElement("vless-clients").addEventListener("click", async (event) => {
   await downloadProfile("vless", client);
 });
 
+mustElement("whitelists").addEventListener("click", async (event) => {
+  const target = event.target;
+  if (!(target instanceof HTMLButtonElement)) {
+    return;
+  }
+  const id = target.dataset.whitelist;
+  if (!id || target.dataset.action !== "download-whitelist") {
+    return;
+  }
+  await downloadWhitelist(id);
+});
+
 async function load(): Promise<void> {
-  const [server, openvpnClients, vlessClients, events, connections] = await Promise.all([
+  const [server, openvpnClients, vlessClients, whitelists, events, connections] = await Promise.all([
     fetchJson<ServerStatus>("/api/server/status"),
     fetchJson<{ clients: Client[] }>("/api/openvpn/clients"),
     fetchJson<{ clients: Client[] }>("/api/vless/clients"),
+    fetchJson<{ lists: WhitelistItem[] }>("/api/whitelists/status"),
     fetchJson<{ events: EventItem[] }>("/api/events"),
     fetchJson<{ connections: Connection[] }>("/api/openvpn/connections")
   ]);
@@ -320,6 +358,7 @@ async function load(): Promise<void> {
   state.vlessClients = vlessClients.clients;
   state.events = events.events;
   state.connections = connections.connections;
+  state.whitelists = whitelists.lists;
   render();
 }
 
@@ -373,6 +412,10 @@ function render(): void {
   mustElement("connections").innerHTML = state.connections.length
     ? renderConnectionsTable(state.connections)
     : `<div class="empty-state">Активных подключений пока нет</div>`;
+
+  mustElement("whitelists").innerHTML = state.whitelists.length
+    ? renderWhitelistTable(state.whitelists)
+    : `<div class="empty-state">Белые списки пока не загружены</div>`;
 }
 
 function renderClientsTable(clients: Client[]): string {
@@ -447,6 +490,43 @@ function renderConnectionsTable(connections: Connection[]): string {
   `;
 }
 
+function renderWhitelistTable(lists: WhitelistItem[]): string {
+  return `
+    <div class="table-responsive">
+      <table class="table align-middle">
+        <thead>
+          <tr>
+            <th>Список</th>
+            <th>Обновлён</th>
+            <th>Размер</th>
+            <th>Источник</th>
+            <th class="text-end">Файл</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${lists.map(renderWhitelistRow).join("")}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+function renderWhitelistRow(item: WhitelistItem): string {
+  const action = `whitelist:download:${item.id}`;
+  const download = item.exists
+    ? `<button class="btn btn-sm btn-outline-primary" type="button" data-action="download-whitelist" data-whitelist="${escapeHtml(item.id)}">${buttonLabel(action, "Скачать")}</button>`
+    : `<span class="text-secondary">нет файла</span>`;
+  return `
+    <tr>
+      <td><strong>${escapeHtml(item.name)}</strong></td>
+      <td>${item.updatedAt ? formatDate(item.updatedAt) : "-"}</td>
+      <td>${formatBytes(item.size)}</td>
+      <td><span class="source-url">${escapeHtml(item.sourceUrl)}</span></td>
+      <td class="text-end">${download}</td>
+    </tr>
+  `;
+}
+
 function renderEvent(event: EventItem): string {
   return `
     <article class="event-item">
@@ -495,6 +575,29 @@ async function downloadProfile(provider: "openvpn" | "vless", name: string): Pro
     link.remove();
     URL.revokeObjectURL(url);
     showNotice(`Файл ${name}.${extension} готов`);
+  });
+}
+
+async function downloadWhitelist(id: string): Promise<void> {
+  const item = state.whitelists.find((entry) => entry.id === id);
+  await withBusy(`Готовлю файл ${item?.fileName || id}...`, `whitelist:download:${id}`, async () => {
+    const response = await fetch(`/api/whitelists/${encodeURIComponent(id)}/download`);
+    if (!response.ok) {
+      await showResponseError(response, "Не удалось скачать белый список");
+      await load();
+      return;
+    }
+
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = item?.fileName || `${id}.txt`;
+    document.body.append(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+    showNotice(`Файл ${item?.fileName || id} готов`);
   });
 }
 

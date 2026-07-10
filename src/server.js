@@ -225,6 +225,38 @@ async function handleApi({ req, res, url, config, store, providers }) {
     return;
   }
 
+  if (req.method === "GET" && url.pathname === "/api/whitelists/status") {
+    sendJson(res, 200, await providers.whitelists.status());
+    return;
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/whitelists/update") {
+    const result = await providers.whitelists.updateAll();
+    await store.addEvent({
+      type: "whitelists.updated",
+      provider: "whitelists",
+      message: "Whitelist subscriptions updated"
+    });
+    sendJson(res, 200, result);
+    return;
+  }
+
+  if (req.method === "GET" && /^\/api\/whitelists\/[^/]+\/download$/.test(url.pathname)) {
+    const id = decodeURIComponent(url.pathname.split("/")[3]);
+    const file = await providers.whitelists.fileFor(id);
+    res.writeHead(200, {
+      "content-type": "text/plain; charset=utf-8",
+      "content-disposition": `attachment; filename="${file.fileName}"`
+    });
+    fs.createReadStream(file.filePath)
+      .on("error", (error) => {
+        console.error(error);
+        res.destroy(error);
+      })
+      .pipe(res);
+    return;
+  }
+
   if (req.method === "POST" && url.pathname === "/api/vless/clients") {
     const body = await readJson(req);
     const name = validateClientName(body.name);

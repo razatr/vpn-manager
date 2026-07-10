@@ -25,5 +25,8 @@
     "configPath": "/etc/xray/config.json",
     "profileDir": "/var/lib/vpn-manager/profiles/vless",
     "profileGroup": "vpn-manager"
+  },
+  "whitelists": {
+    "dataDir": "./data/whitelists"
   }
 }

@@ -189,6 +189,15 @@ dd {
   color: var(--text-muted);
 }
 
+.source-url {
+  display: inline-block;
+  max-width: min(360px, 42vw);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: bottom;
+  white-space: nowrap;
+}
+
 @media (max-width: 820px) {
   .topbar,
   .section-head,
@@ -208,5 +217,9 @@ dd {
 
   .inline-form {
     width: 100%;
+  }
+
+  .source-url {
+    max-width: 220px;
   }
 }

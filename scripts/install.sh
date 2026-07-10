@@ -153,6 +153,7 @@ config.vless.helperUseSudo = true;
 config.vless.configPath = '/etc/xray/config.json';
 config.vless.profileDir = '${DATA_DIR}/profiles/vless';
 config.vless.profileGroup = '${APP_USER}';
+config.whitelists.dataDir = '${DATA_DIR}/whitelists';
 fs.writeFileSync(path, JSON.stringify(config, null, 2) + '\n');
 " 
 

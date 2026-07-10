@@ -14,7 +14,7 @@
     "test:api": "node --test tests/api/*.test.js",
     "test:e2e": "playwright test",
     "test": "npm run test:api && npm run test:e2e",
-    "check": "npm run typecheck && node --check src/main.js && node --check src/config.js && node --check src/server.js && node --check src/store.js && node --check src/providers/openvpn.js && node --check src/providers/vless.js"
+    "check": "npm run typecheck && node --check src/main.js && node --check src/config.js && node --check src/server.js && node --check src/store.js && node --check src/providers/openvpn.js && node --check src/providers/vless.js && node --check src/providers/whitelists.js"
   },
   "engines": {
     "node": ">=20"
